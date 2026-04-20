@@ -84,7 +84,8 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                }
                if (line.IsEndingCommand) break;
 
-               if (line.LineCode[0] != lastCommand) (lastCommand, repeateLength) = (line.LineCode[0], 1);
+               var commandKey = line.LineCode.Aggregate(0, (acc, b) => (acc << 8) | b);
+               if (commandKey != lastCommand) (lastCommand, repeateLength) = (commandKey, 1);
                else repeateLength += 1;
                if (line.Args.Count > 0) repeateLength = 0;
                if (repeateLength > MaxRepeates) break; // same command lots of times in a row is fishy
@@ -175,7 +176,8 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
             length += line.CompiledByteLength(model, address + length, destinations);
             if (line.IsEndingCommand) break;
 
-            if (line.LineCode[0] != lastCommand) (lastCommand, repeateLength) = (line.LineCode[0], 1);
+            var commandKey = line.LineCode.Aggregate(0, (acc, b) => (acc << 8) | b);
+            if (commandKey != lastCommand) (lastCommand, repeateLength) = (commandKey, 1);
             else repeateLength += 1;
             if (line.Args.Count > 0) repeateLength = 0;
             if (repeateLength > ScriptParser.MaxRepeates) break; // same command lots of times in a row is fishy
@@ -1001,7 +1003,8 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
             length += line.CompiledByteLength(model, address + length, destinationLengths);
             if (line.IsEndingCommand) break;
 
-            if (line.LineCode[0] != lastCommand) (lastCommand, repeateLength) = (line.LineCode[0], 1);
+            var commandKey = line.LineCode.Aggregate(0, (acc, b) => (acc << 8) | b);
+            if (commandKey != lastCommand) (lastCommand, repeateLength) = (commandKey, 1);
             else repeateLength += 1;
             if (line.Args.Count > 0) repeateLength = 0;
             if (repeateLength > ScriptParser.MaxRepeates) break; // same command lots of times in a row is fishy

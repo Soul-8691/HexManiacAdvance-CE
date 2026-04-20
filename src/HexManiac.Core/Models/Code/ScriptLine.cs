@@ -331,6 +331,8 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
 
       public virtual bool IsEndingCommand { get; }
 
+      protected virtual bool HideExtraLineCodeBytes => false;
+
       /// <param name="destinationLengths">If this line contains pointers, calculate the pointer data's lengths and include here.</param>
       public int CompiledByteLength(IDataModel model, int start, IDictionary<int, int> destinationLengths) {
          var length = LineCode.Count;
@@ -422,7 +424,7 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
 
       public bool CanCompile(string line) {
          if (!(line + " ").StartsWith(LineCommand + " ", StringComparison.CurrentCultureIgnoreCase)) return false;
-         if (LineCode.Count == 1) return true;
+         if (LineCode.Count == 1 || HideExtraLineCodeBytes) return true;
          var tokens = Tokenize(line).ToList();
          if (tokens.Count < LineCode.Count) return false;
          tokens.RemoveAt(0);
@@ -438,17 +440,20 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
          tokens = Tokenize(scriptLine);
          if (!tokens[0].Equals(LineCommand, StringComparison.CurrentCultureIgnoreCase)) throw new ArgumentException($"Command {LineCommand} was expected, but received {tokens[0]} instead.");
          var commandText = LineCommand;
-         for (int i = 1; i < LineCode.Count; i++) commandText += " " + LineCode[i].ToString("X2");
+         var tokenOffset = HideExtraLineCodeBytes ? 1 : LineCode.Count;
+         if (!HideExtraLineCodeBytes) {
+            for (int i = 1; i < LineCode.Count; i++) commandText += " " + LineCode[i].ToString("X2");
+         }
          var fillerCount = Args.Count(arg => arg.Name == "filler");
          for (int i = 0; i < fillerCount; i++) {
-            if (tokens.Length < Args.Count + LineCode.Count) tokens = tokens.Append("0").ToArray();
+            if (tokens.Length < Args.Count + tokenOffset) tokens = tokens.Append("0").ToArray();
          }
          if (Args.Count > 0 && Args.Last() is ArrayArg) {
             if (Args.Count > tokens.Length) {
-               return $"Command {commandText} expects {Args.Count} arguments, but received {tokens.Length - LineCode.Count} instead.";
+               return $"Command {commandText} expects {Args.Count} arguments, but received {tokens.Length - tokenOffset} instead.";
             }
-         } else if (Args.Count != tokens.Length - LineCode.Count) {
-            return $"Command {commandText} expects {Args.Count} arguments, but received {tokens.Length - LineCode.Count} instead.";
+         } else if (Args.Count != tokens.Length - tokenOffset) {
+            return $"Command {commandText} expects {Args.Count} arguments, but received {tokens.Length - tokenOffset} instead.";
          }
          return null;
       }
@@ -459,9 +464,10 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
          if (error != null) return error;
          var results = new List<byte>(LineCode);
          start += LineCode.Count;
+         var tokenOffset = HideExtraLineCodeBytes ? 1 : LineCode.Count;
          for (int i = 0; i < Args.Count; i++) {
             if (Args[i] is ScriptArg scriptArg) {
-               var token = tokens[i + LineCode.Count];
+               var token = tokens[i + tokenOffset];
                var message = scriptArg.Build(model, start, token, results, labels);
                if (message != null) return message;
                start += scriptArg.Length(model, start);
@@ -500,8 +506,10 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
          var allFillerIsZero = IsAllFillerZero(data, start);
          start += LineCode.Count;
          var builder = new StringBuilder(LineCommand);
-         for (int i = 1; i < LineCode.Count; i++) {
-            builder.Append(" " + LineCode[i].ToHexString());
+         if (!HideExtraLineCodeBytes) {
+            for (int i = 1; i < LineCode.Count; i++) {
+               builder.Append(" " + LineCode[i].ToHexString());
+            }
          }
 
          var streamContent = new List<string>();
@@ -570,7 +578,9 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
    public class BSEScriptLine : ScriptLine {
       public BSEScriptLine(string engineLine) : base(engineLine) { }
 
-      public override bool IsEndingCommand => LineCode.Count == 1 && LineCode[0].IsAny<byte>(0x28, 0x3c, 0x3d, 0x3e, 0x3f, 0xef, 0xf6, 0xf7);
+      protected override bool HideExtraLineCodeBytes => true;
+
+      public override bool IsEndingCommand => LineCode[0].IsAny<byte>(0x28, 0x3c, 0x3d, 0x3e, 0x3f, 0xef, 0xf6, 0xf7) && LineCode.Count == 1;
    }
 
    public class ASEScriptLine : ScriptLine {
