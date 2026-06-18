@@ -512,6 +512,67 @@ f4 subattackerhpbydmg
 f5 removeattackerstatus1
 f6 finishaction
 f7 finishturn
+
+# CFRU (Complete Fire Red Upgrade) extra battle script commands - FireRed-only hack, see
+# https://github.com/Skeli789/Complete-Fire-Red-Upgrade/blob/master/assembly/data/battle_script_commands_table.s#L265-L329
+# ff XX commands use a secondary opcode byte (gBattleScriptingCommandsTable2) and are written as "ff <byte> name ..."
+[BPRE] f8 callasm asm<>                                                                                     # Calls an arbitrary ASM function as if it were a battle script command.
+[BPRE] f9 sethalfword offset<> value:                                                                       # Writes a halfword to an arbitrary RAM address (must be 2-aligned).
+[BPRE] fa setword offset<> value::                                                                          # Writes a word to an arbitrary RAM address (must be 4-aligned).
+[BPRE] fb setspecialstatusbit battler.bs_battlers status3::                                                  # Sets bits in gStatuses3 for a battler.
+[BPRE] fc clearspecialstatusbit battler.bs_battlers status3::                                                # Clears bits in gStatuses3 for a battler.
+[BPRE] fd jumpifabilitypresenttargetfield ability.data.abilities.names ptr<`bse`>                           # Jumps if the target or its partner has the given ability.
+[BPRE] fe prefaintmoveendeffects arg. filler.                                                                # Runs the pre-faint move-end effect loop (Stench, King's Shield, Rage, Synchronize, etc).
+[BPRE] ff 02 cureprimarystatus battler.bs_battlers ptr<`bse`>                                                # Cures status1 on a battler; jumps to ptr if it was already cured.
+[BPRE] ff 03 jumpifpartnerattack battler.bs_battlers move:data.pokemon.moves.names ptr<`bse`>                # Jumps if the battler's live partner chose the given move this turn.
+[BPRE] ff 06 setterrain ptr<`bse`>                                                                           # Sets the active terrain based on gCurrentMove; continues at ptr either way.
+[BPRE] ff 07 jumpifhelditemeffect battler.bs_battlers effect. ptr<`bse`>                                     # Jumps if the battler's held item has the given item effect.
+[BPRE] ff 08 counterclear battler.bs_battlers id. ptr<`bse`>                                                 # Clears a CFRU counter (Telekinesis, Magnet Rise, etc); jumps to ptr if it wasn't set.
+[BPRE] ff 09 jumpifcounter battler.bs_battlers id. predicate. value. ptr<`bse`>                              # Compares a CFRU counter's value against value using predicate (see conditions at top of file).
+[BPRE] ff 0a setability battler.bs_battlers ability.data.abilities.names                                     # Directly overwrites a battler's current ability.
+[BPRE] ff 0c jumpiftargetpartner ptr<`bse`>                                                                  # Jumps if the target is the attacker's partner.
+[BPRE] ff 0e setcounter battler.bs_battlers id. amount.                                                       # Sets a CFRU counter to amount.
+[BPRE] ff 0f jumpifgrounded battler.bs_battlers ptr<`bse`>                                                   # Jumps if the battler is grounded.
+[BPRE] ff 10 jumpifhelditem battler.bs_battlers item:data.items.stats ptr<`bse`>                             # Jumps if the battler is holding the given item.
+[BPRE] ff 11 refreshhpbar battler.bs_battlers                                                                # Calls vanilla Cmd_updatestatusicon (0x98) to refresh a battler's HP bar/status icon.
+[BPRE] ff 12 jumpifhealthcomparestomax battler.bs_battlers predicate. ptr<`bse`>                             # Compares the battler's current HP to its max HP.
+[BPRE] ff 13 setdamagetobankhealthfraction battler.bs_battlers fraction. usemaxhp.                           # Sets gBattleMoveDamage to (max or base max HP) / fraction.
+[BPRE] ff 14 jumpiftypepresent type.data.pokemon.type.names ptr<`bse`>                                       # Jumps if any battler currently has the given type.
+[BPRE] ff 15 jumpifstatcanbemodified battler.bs_battlers stat.bs_stats flags. ptr<`bse`>                     # Checks if a stat change would actually apply (abilities, stage caps, Contrary, etc).
+[BPRE] ff 16 jumpifnoviablemonsleft battler.bs_battlers ptr<`bse`>                                           # Jumps if the battler's side has no more usable Pokemon.
+[BPRE] ff 17 setsidestatus battler.bs_battlers status.sidestatus                                             # Sets a side status flag. NOTE: current CFRU code only advances 3 bytes despite reading a 2-byte status - possible engine bug, verify in-game before relying on this.
+[BPRE] ff 18 clearsidestatus battler.bs_battlers status.sidestatus                                           # Clears a side status flag. Same byte-length caveat as setsidestatus above.
+[BPRE] ff 19 formchange battler.bs_battlers species:data.pokemon.names targetspecies:data.pokemon.names reloadtype. reloadstats. reloadability. ptr<`bse`>  # Changes a battler's form if it still matches species; jumps to ptr if not.
+[BPRE] ff 1a jumpifabilitypresentattackerfield ability.data.abilities.names ptr<`bse`>                       # Jumps if the attacker's field side has the given ability active.
+[BPRE] ff 1b tryactivateswitchinability battler.bs_battlers                                                  # Runs switch-in ability effects for a battler.
+[BPRE] ff 1c handletrainerslidemsg battler.bs_battlers case.                                                 # Internal bookkeeping for the trainer-slide-in animation/message.
+[BPRE] ff 1d trytrainerslidefirstdownmsg battler.bs_battlers                                                 # Shows the trainer's first-Pokemon-down slide message if applicable.
+[BPRE] ff 1e trainerslideout battler.bs_battlers                                                             # Slides a trainer sprite out.
+[BPRE] ff 1f flowershieldlooper plusminus. success<`bse`> fail<`bse`>                                        # Loops over battlers for Flower Shield/Aromatic Mist-style plus/minus effects.
+[BPRE] ff 20 jumpifprotectedbycraftyshield battler.bs_battlers ptr<`bse`>                                    # Jumps if the battler is protected by Crafty Shield. NOTE: current CFRU code advances 1 byte short of battler+ptr - possible engine bug, verify in-game before relying on this.
+[BPRE] ff 21 tryspectralthiefsteal ptr<`bse`>                                                                # Steals positive stat stages from the target for Spectral Thief; jumps to ptr on success.
+[BPRE] ff 22 jumpifspecies battler.bs_battlers species:data.pokemon.names ptr<`bse`>                         # Jumps if the battler is the given species.
+[BPRE] ff 23 faintpokemonaftermove filler. filler.                                                           # Faints the target if it's at 0 HP and runs faint-related side effects.
+[BPRE] ff 24 jumpifattackeralreadydiddamage ptr<`bse`>                                                       # Jumps if the attacker has already dealt damage this move (multi-hit moves).
+[BPRE] ff 25 jumpifterrainandgrounded terrain. battler.bs_battlers ptr<`bse`>                                # Jumps if the given terrain is active and the battler is grounded.
+[BPRE] ff 26 attackstringnoprotean                                                                           # Prints the "used move" string without triggering Protean.
+[BPRE] ff 27 tryactivateprotean                                                                              # Changes the attacker's type to match its move if Protean is active.
+[BPRE] ff 28 jumpifweight battler.bs_battlers predicate. weight: ptr<`bse`>                                  # Compares the battler's actual weight against weight using predicate.
+[BPRE] ff 29 trysetsleep battler.bs_battlers ptr<`bse`>                                                      # Tries to put the battler to sleep; jumps to ptr on failure.
+[BPRE] ff 2a trysetparalysis battler.bs_battlers ptr<`bse`>                                                  # Tries to paralyze the battler; jumps to ptr on failure.
+[BPRE] ff 2b trysetburn battler.bs_battlers ptr<`bse`>                                                       # Tries to burn the battler; jumps to ptr on failure.
+[BPRE] ff 2c trysetpoison battler.bs_battlers ptr<`bse`>                                                     # Tries to poison the battler; jumps to ptr on failure.
+[BPRE] ff 2d addindicatorforattackerswitchineffects                                                          # Flags the attacker for the "switch in to counter" prompt.
+[BPRE] ff 2e setmoveeffect2                                                                                  # Applies a secondary move effect.
+[BPRE] ff 2f setmaxmoveeffect                                                                                # Applies a Max Move's special effect (raid shields, team stat changes, etc).
+[BPRE] ff 30 jumpifdynamaxed battler.bs_battlers ptr<`bse`>                                                  # Jumps if the battler is Dynamaxed.
+[BPRE] ff 31 jumpifraidboss battler.bs_battlers ptr<`bse`>                                                   # Jumps if the battler is the raid boss.
+[BPRE] ff 32 recycleberry battler.bs_battlers ptr<`bse`>                                                     # Recycles the attacker's (or its partner's) last-consumed berry; jumps to ptr on failure.
+[BPRE] ff 33 seteffectprimaryscriptingbank                                                                   # Runs the move-effect setter using gBattleScripting.bank as the target.
+[BPRE] ff 34 canconfuse battler.bs_battlers ptr<`bse`>                                                       # Checks if the battler can be confused (Own Tempo, Safeguard, Misty Terrain); jumps to ptr on failure.
+[BPRE] ff 35 jumpifmaxchistrikecapped battler.bs_battlers ptr<`bse`>                                         # Jumps if the battler has already received 3+ Chi Strike crit boosts.
+[BPRE] ff 36 trygetcottondowntarget ptr<`bse`>                                                               # Finds the next valid Cotton Down target; jumps to ptr if none remain.
+
 [BPEE] f8 trainerslideout battler.bs_battlers
 
 # helpful macros
