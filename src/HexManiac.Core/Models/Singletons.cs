@@ -29,6 +29,7 @@ namespace HavenSoft.HexManiac.Core.Models {
       private const string ScriptReferenceDocumetationFileName = "resources/scriptReference.md";
       private const string DocReferenceFileName = "resources/docReference.txt";
       private const string PythonUtilityFileName = "resources/hma.py";
+      private const string PokefireredSymbolsFileName = "resources/pokefireredReference.txt";
 
       public IMetadataInfo MetadataInfo { get; }
       public IReadOnlyDictionary<string, GameReferenceTables> GameReferenceTables { get; }
@@ -42,6 +43,7 @@ namespace HavenSoft.HexManiac.Core.Models {
       public IReadOnlyDictionary<string, IReadOnlyList<DocLabel>> DocReference { get; }
       public IWorkDispatcher WorkDispatcher { get; }
       public string PythonUtility { get; }
+      public PokefireredSymbols PokefireredSymbols { get; }
       public int CopyLimit { get; }
 
       public Singletons(IWorkDispatcher dispatcher = null, int copyLimit = 40000) {
@@ -56,6 +58,8 @@ namespace HavenSoft.HexManiac.Core.Models {
          DocReference = LoadDocReference(DocReferenceFileName);
          WorkDispatcher = dispatcher ?? InstantDispatch.Instance;
          PythonUtility = File.ReadAllText(PythonUtilityFileName);
+         var pokefireredText = File.Exists(PokefireredSymbolsFileName) ? File.ReadAllText(PokefireredSymbolsFileName) : string.Empty;
+         PokefireredSymbols = new PokefireredSymbols(WorkDispatcher, pokefireredText);
          CopyLimit = copyLimit;
       }
 
@@ -75,6 +79,7 @@ namespace HavenSoft.HexManiac.Core.Models {
          WorkDispatcher = InstantDispatch.Instance;
          CopyLimit = copyLimit;
          PythonUtility = string.Empty;
+         PokefireredSymbols = new PokefireredSymbols(WorkDispatcher, string.Empty);
       }
 
       private IReadOnlyList<IScriptLine> LoadScriptReference<TLine>(string file) where TLine : ScriptLine {

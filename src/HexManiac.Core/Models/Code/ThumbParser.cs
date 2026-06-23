@@ -12,9 +12,11 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
    public class ThumbParser {
       private readonly List<ConditionCode> conditionalCodes = new List<ConditionCode>();
       private readonly List<IInstruction> instructionTemplates = new List<IInstruction>();
+      private readonly PokefireredSymbols pokefireredSymbols;
       public ThumbParser(Singletons singletons) {
          conditionalCodes.AddRange(singletons.ThumbConditionalCodes);
          instructionTemplates.AddRange(singletons.ThumbInstructionTemplates);
+         pokefireredSymbols = singletons.PokefireredSymbols;
          instructionTemplates.AddRange(new IInstruction[] {
             new ByteInstruction(),
             new HalfWordInstruction(),
@@ -57,13 +59,28 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                         var anchor = data.GetAnchorFromAddress(-1, value - BaseModel.PointerOffset);
                         if (!string.IsNullOrEmpty(anchor)) {
                            valueText = $"<{anchor}>";
-                        } else if (value > 20100 || value.InRange(0x4000, 20000)) {
-                           valueText = $"0x{value:X8}";
-                        } else if (value < -10000) {
-                           valueText = $"0x{(uint)value:X8}";
+                        } else {
+                           // a .word/ldr literal is frequently a raw pointer (often a RAM address
+                           // like 0x02xxxxxx EWRAM), so look it up as-is rather than as a file offset.
+                           var symbol = pokefireredSymbols.TryGetSymbol(value);
+                           if (!string.IsNullOrEmpty(symbol)) {
+                              valueText = $"<{symbol}>";
+                           } else if (value > 20100 || value.InRange(0x4000, 20000)) {
+                              valueText = $"0x{value:X8}";
+                           } else if (value < -10000) {
+                              valueText = $"0x{(uint)value:X8}";
+                           }
                         }
                         var gap = new string(' ', (30 - line.Length).LimitToRange(0, 30));
                         line += gap + $"@ = {valueText}";
+                     } else if (string.IsNullOrEmpty(data.GetAnchorFromAddress(-1, address))) {
+                        // an un-named branch/call/data target: label it if it's a known pokefirered
+                        // ROM symbol (looked up by the GBA-mapped address, not the raw file offset).
+                        var symbol = pokefireredSymbols.TryGetSymbol(address + BaseModel.PointerOffset);
+                        if (!string.IsNullOrEmpty(symbol)) {
+                           var gap = new string(' ', (30 - line.Length).LimitToRange(0, 30));
+                           line += gap + $"@ {symbol}";
+                        }
                      }
                   }
                }

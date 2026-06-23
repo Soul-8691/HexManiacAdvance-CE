@@ -35,7 +35,13 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       public IDataInvestigator Investigator { get; set; }
 
       private bool isSelected;
-      public bool IsSelected { get => isSelected; set => Set(ref isSelected, value, old => UpdateContent()); }
+      public bool IsSelected {
+         get => isSelected;
+         set => Set(ref isSelected, value, old => {
+            UpdateContent();
+            if (isSelected) singletons.PokefireredSymbols.RequestBackgroundRefresh();
+         });
+      }
 
       private bool insertAutoActive = true;
       public bool InsertAutoActive { get => insertAutoActive; set => Set(ref insertAutoActive, value); }
