@@ -62,7 +62,10 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                         } else {
                            // a .word/ldr literal is frequently a raw pointer (often a RAM address
                            // like 0x02xxxxxx EWRAM), so look it up as-is rather than as a file offset.
-                           var symbol = pokefireredSymbols.TryGetSymbol(value);
+                           // It may also be a Thumb function pointer (used for an indirect call),
+                           // which has bit0 set per the ARM calling convention - value-1 is the
+                           // real instruction address in that case.
+                           var symbol = pokefireredSymbols.TryGetSymbol(value) ?? pokefireredSymbols.TryGetFunctionPointerSymbol(value);
                            if (!string.IsNullOrEmpty(symbol)) {
                               valueText = $"<{symbol}>";
                            } else if (value > 20100 || value.InRange(0x4000, 20000)) {

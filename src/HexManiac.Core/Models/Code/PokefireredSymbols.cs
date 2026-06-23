@@ -17,6 +17,7 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
    /// </summary>
    public class PokefireredSymbols {
       public const string SymbolUrl = "https://raw.githubusercontent.com/pret/pokefirered/refs/heads/symbols/pokefirered.sym";
+      public const int RomStart = 0x08000000;
 
       private static string CacheDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HexManiacAdvance");
       private static string CacheFile => Path.Combine(CacheDirectory, "pokefirered.sym");
@@ -25,6 +26,7 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       private readonly string staticFallbackContent;
       private readonly object lockObject = new();
       private Dictionary<int, string> symbols;
+      private int rodataStart = int.MaxValue; // everything at/after this address is data, not code
       private bool refreshRequested;
 
       public PokefireredSymbols(IWorkDispatcher dispatcher, string staticFallbackContent) {
@@ -42,6 +44,23 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       }
 
       /// <summary>
+      /// A .word/ldr literal used as a Thumb function pointer (for an indirect call) has bit0
+      /// set per the ARM calling convention - the real instruction address is value-1. Only
+      /// trusts that interpretation if the resulting address actually falls within the .text
+      /// (code) region, i.e. before .rodata, so an arbitrary odd data value doesn't get
+      /// mislabeled as a function.
+      /// </summary>
+      public string TryGetFunctionPointerSymbol(int value) {
+         if ((value & 1) == 0) return null;
+         var candidate = value - 1;
+         EnsureLoaded();
+         lock (lockObject) {
+            if (candidate < RomStart || candidate >= rodataStart) return null;
+            return symbols.TryGetValue(candidate, out var name) ? name : null;
+         }
+      }
+
+      /// <summary>
       /// Kicks off a one-time, best-effort background download of the latest symbol file.
       /// Safe to call repeatedly (e.g. every time the Code Tool is opened) - only the first
       /// call in a session actually starts a fetch.
@@ -56,8 +75,11 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
                var text = client.GetStringAsync(SymbolUrl).Result;
                if (string.IsNullOrWhiteSpace(text)) return;
-               var parsed = Parse(text);
-               lock (lockObject) symbols = parsed;
+               var (parsedSymbols, parsedRodataStart) = Parse(text);
+               lock (lockObject) {
+                  symbols = parsedSymbols;
+                  rodataStart = parsedRodataStart;
+               }
                Directory.CreateDirectory(CacheDirectory);
                File.WriteAllText(CacheFile, text);
             } catch {
@@ -75,25 +97,28 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
             } catch {
                // fall back to the bundled snapshot below
             }
-            symbols = Parse(text ?? staticFallbackContent);
+            (symbols, rodataStart) = Parse(text ?? staticFallbackContent);
          }
       }
 
       /// <summary>
       /// Parses nm/objdump-style .sym lines: "AAAAAAAA g SSSSSSSS name" (address, scope, size, name).
+      /// Also records the start of the .rodata section, which marks the end of real code/functions.
       /// </summary>
-      public static Dictionary<int, string> Parse(string text) {
+      public static (Dictionary<int, string> Symbols, int RodataStart) Parse(string text) {
          var result = new Dictionary<int, string>();
-         if (string.IsNullOrEmpty(text)) return result;
+         var rodataStart = int.MaxValue;
+         if (string.IsNullOrEmpty(text)) return (result, rodataStart);
          foreach (var line in text.Split('\n')) {
             var parts = line.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 4) continue;
             if (!int.TryParse(parts[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var address)) continue;
             var name = parts[^1];
+            if (name == ".rodata") rodataStart = Math.Min(rodataStart, address);
             if (string.IsNullOrEmpty(name) || name.StartsWith(".")) continue;
             result[address] = name;
          }
-         return result;
+         return (result, rodataStart);
       }
    }
 }
