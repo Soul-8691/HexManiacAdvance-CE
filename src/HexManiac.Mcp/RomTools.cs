@@ -662,8 +662,10 @@ public sealed class RomTools {
       [Description("A list-valued column to split into one ✓/✗ column per distinct value, e.g. 'flags'")] string? explode = null,
       [Description("Style the sheet for docs (bold/frozen header, type/category/✓✗ colors, auto-width)")] bool style = false,
       [Description("Freeze the first N columns so they stay visible when scrolling right (0 = none)")] int freezeColumns = 0,
+      [Description("Add sort/filter buttons on the header row (Data > Create a filter)")] bool filter = false,
+      [Description("Hide this tab after writing (e.g. a lookup/asset tab); false leaves it visible")] bool hidden = false,
       [Description("Apps Script web-app URL (default: configured HEXMANIAC_SHEETS_URL)")] string? url = null) {
-      try { return Stamp(JsonSerializer.Serialize(GoogleSheetsService.PushJson(path, key ?? "", tab ?? "", url ?? "", explode ?? "", style, freezeColumns), Json), "headless"); }
+      try { return Stamp(JsonSerializer.Serialize(GoogleSheetsService.PushJson(path, key ?? "", tab ?? "", url ?? "", explode ?? "", style, freezeColumns, filter, hidden), Json), "headless"); }
       catch (System.Exception ex) { return Stamp(JsonSerializer.Serialize(RomAutomation.Err(ex.Message), Json), "headless"); }
    }
 

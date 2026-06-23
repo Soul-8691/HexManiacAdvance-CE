@@ -47,6 +47,8 @@ function doPost(e) {
         sheet.getRange(1, 1, values.length, cols).setValues(values);
         if (req.format) applyStyle(sheet, values, req.format);
       }
+      if (req.hidden === true) sheet.hideSheet();
+      else if (req.hidden === false) sheet.showSheet();
       return json({ ok: true, rows: Math.max(0, values.length - 1) });
     }
 
@@ -104,6 +106,12 @@ function applyStyle(sheet, values, fmt) {
         if (d > 0) sheet.getRange(1, col, 1, 1).shiftColumnGroupDepth(-d);   // reset on re-push so groups don't stack
         sheet.getRange(1, col, 1, 1).shiftColumnGroupDepth(1);
       }
+    } catch (e) {}
+  }
+  if (fmt.filter) {   // sort/filter buttons on the header row (Data > Create a filter)
+    try {
+      var ex = sheet.getFilter(); if (ex) ex.remove();   // re-push: drop the old filter first
+      sheet.getRange(1, 1, nRows, nCols).createFilter();
     } catch (e) {}
   }
 }

@@ -124,7 +124,7 @@ public static class GoogleSheetsService {
    // Push records from a JSON file (an export_* output) to a tab as a flattened READ-ONLY reference view:
    // lists are joined with ", ", nested objects become compact JSON. Not pulled back (columns are derived,
    // not raw table fields) - use sheet_push/sheet_pull for editable round-trips.
-   public static object PushJson(string path, string key, string tab, string urlOverride, string explode, bool style, int freezeColumns) {
+   public static object PushJson(string path, string key, string tab, string urlOverride, string explode, bool style, int freezeColumns, bool filter, bool hidden) {
       var (url, token) = Config(urlOverride);
       if (string.IsNullOrEmpty(url)) return RomAutomation.Err("No web-app URL. Set HEXMANIAC_SHEETS_URL (or <config>/sheets.json), or pass url. See docs/GOOGLE-SHEETS.md.");
       if (!File.Exists(path)) return RomAutomation.Err($"File not found: {path}");
@@ -167,8 +167,8 @@ public static class GoogleSheetsService {
       }
       // when styling, the MCP computes the WHOLE look (per-cell colors, alignments, widths) and ships it as
       // `format`; the web app just applies it. So tweaking the look is an MCP change - no Apps Script redeploy.
-      object format = style ? BuildFormat(columns, values, freezeColumns) : null;
-      var res = Post(url, new { action = "push", token, tab, values, format });
+      object format = style ? BuildFormat(columns, values, freezeColumns, filter) : null;
+      var res = Post(url, new { action = "push", token, tab, values, format, hidden });
       if (res.TryGetProperty("error", out var e)) return RomAutomation.Err("web app: " + e.GetString());
       return new Dictionary<string, object?> { ["ok"] = true, ["source"] = Path.GetFileName(path), ["key"] = key, ["tab"] = tab, ["rowsWritten"] = values.Count - 1, ["columns"] = columns.Count, ["explodedInto"] = doExplode ? explodeVals.Count : 0, ["styled"] = style, ["note"] = "Read-only reference view; not pulled back." };
    }
@@ -191,7 +191,7 @@ public static class GoogleSheetsService {
 
    private static bool IsYes(string s) => s != null && s.StartsWith("✓");
    private static bool IsNo(string s) => s != null && (s.StartsWith("✗") || s.StartsWith("✘"));
-   private static object BuildFormat(List<string> columns, List<List<object?>> values, int freezeColumns) {
+   private static object BuildFormat(List<string> columns, List<List<object?>> values, int freezeColumns, bool filter) {
       int nCols = columns.Count;
       int typeCol = columns.FindIndex(h => string.Equals(h, "type", StringComparison.OrdinalIgnoreCase));
       int idCol   = columns.FindIndex(h => string.Equals(h, "id #", StringComparison.OrdinalIgnoreCase));
@@ -227,9 +227,10 @@ public static class GoogleSheetsService {
          headerBold = true, headerBackground = "#efefef", headerAlign = "center", freezeHeader = true,
          freezeColumns = freezeColumns > 0 ? (object)freezeColumns : null,
          verticalAlign = "middle", backgrounds = bg, fontColors = fc, columnAligns = aligns,
-         autoResize = true, widthPadding = 20, widthCap = 420,
+         autoResize = true, widthPadding = filter ? 42 : 20, widthCap = 420,   // extra room for the filter button so header labels don't clip
          columnWidths = widths.Count > 0 ? (object)widths : null,
          columnGroups = groups.Count > 0 ? (object)groups : null,
+         filter = filter ? (object)true : null,
       };
    }
 
