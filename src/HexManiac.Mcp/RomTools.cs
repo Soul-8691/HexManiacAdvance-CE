@@ -629,6 +629,44 @@ public sealed class RomTools {
          () => SpriteIO.ImportPalette(session.Require(), () => session.Token, palette, page, colors, inPath));
    }
 
+   [McpServerTool(Name = "sheet_push")]
+   [Description("Push a ROM table to a Google Sheet via a bound Apps Script web app (no Google Cloud/OAuth): a header row of field names then one row per record (clears the tab first). table: anchor name (e.g. data.pokemon.stats). tab: sheet/tab name (default: first tab). url: the web-app URL (default: HEXMANIAC_SHEETS_URL / <config>/sheets.json). Deploy the script from docs/google-sheets-webapp.gs - see docs/GOOGLE-SHEETS.md. Requires an open ROM (headless).")]
+   public string SheetPush(
+      RomSession session,
+      [Description("ROM table/anchor name, e.g. data.pokemon.stats")] string table,
+      [Description("Sheet/tab name (default: first tab)")] string? tab = null,
+      [Description("Apps Script web-app URL (default: configured HEXMANIAC_SHEETS_URL)")] string? url = null) {
+      if (session.Model == null) return Stamp(JsonSerializer.Serialize(RomAutomation.Err("Open a ROM first (open_rom)."), Json), "headless");
+      try { return Stamp(JsonSerializer.Serialize(GoogleSheetsService.PushTable(session.Require(), table, tab ?? "", url ?? ""), Json), "headless"); }
+      catch (System.Exception ex) { return Stamp(JsonSerializer.Serialize(RomAutomation.Err(ex.Message), Json), "headless"); }
+   }
+
+   [McpServerTool(Name = "sheet_pull")]
+   [Description("Pull a Google Sheet tab back into a ROM table as ONE undo step, via the bound Apps Script web app. The sheet's header row maps columns to fields and must include an 'index' column (the ROM row id) to match rows - run sheet_push first to get the layout. 'slug'/'index' are treated as read-only keys. table/tab/url as in sheet_push. Requires an open ROM (headless).")]
+   public string SheetPull(
+      RomSession session,
+      [Description("ROM table/anchor name, e.g. data.pokemon.stats")] string table,
+      [Description("Sheet/tab name (default: first tab)")] string? tab = null,
+      [Description("Apps Script web-app URL (default: configured HEXMANIAC_SHEETS_URL)")] string? url = null) {
+      if (session.Model == null) return Stamp(JsonSerializer.Serialize(RomAutomation.Err("Open a ROM first (open_rom)."), Json), "headless");
+      try { return Stamp(JsonSerializer.Serialize(GoogleSheetsService.PullTable(session.Require(), () => session.Token, table, tab ?? "", url ?? ""), Json), "headless"); }
+      catch (System.Exception ex) { return Stamp(JsonSerializer.Serialize(RomAutomation.Err(ex.Message), Json), "headless"); }
+   }
+
+   [McpServerTool(Name = "sheet_push_json")]
+   [Description("Push records from a JSON file (e.g. an export_moves / export_items / export_pokedex output) to a Google Sheet tab as a flattened, READ-ONLY reference view: scalars as-is, lists joined with ', ', nested objects as compact JSON. path: the .json file. key: the array property to push (e.g. 'moves', 'items', 'pokemon'); omit if the file's root is itself an array. tab + url as in sheet_push. explode: a list-valued column to split into one ✓/✗ column per distinct value (e.g. 'flags'). style=true makes it doc-ready: bold+frozen header, ✓/✗ cells colored green/red and centered, auto-sized columns (needs the latest docs/google-sheets-webapp.gs deployed). NOT pulled back (columns are derived). Does not require an open ROM.")]
+   public string SheetPushJson(
+      [Description("Path to the .json file (an export_* tool's output)")] string path,
+      [Description("Array property to push, e.g. 'moves' / 'items' / 'pokemon' (omit if the root is an array)")] string? key = null,
+      [Description("Sheet/tab name (default: first tab)")] string? tab = null,
+      [Description("A list-valued column to split into one ✓/✗ column per distinct value, e.g. 'flags'")] string? explode = null,
+      [Description("Style the sheet for docs (bold/frozen header, type/category/✓✗ colors, auto-width)")] bool style = false,
+      [Description("Freeze the first N columns so they stay visible when scrolling right (0 = none)")] int freezeColumns = 0,
+      [Description("Apps Script web-app URL (default: configured HEXMANIAC_SHEETS_URL)")] string? url = null) {
+      try { return Stamp(JsonSerializer.Serialize(GoogleSheetsService.PushJson(path, key ?? "", tab ?? "", url ?? "", explode ?? "", style, freezeColumns), Json), "headless"); }
+      catch (System.Exception ex) { return Stamp(JsonSerializer.Serialize(RomAutomation.Err(ex.Message), Json), "headless"); }
+   }
+
    [McpServerTool(Name = "supported_roms")]
    [Description("Reference of the Pokemon GBA base games HexManiacAdvance supports: header codes, No-Intro names, md5/sha1/crc32, and support tier. No code: the whole reference. code (e.g. 'BPRE0' or 'bpre'): matching entries.")]
    public string SupportedRoms_([Description("Optional header code filter, e.g. BPRE0")] string? code = null) {
