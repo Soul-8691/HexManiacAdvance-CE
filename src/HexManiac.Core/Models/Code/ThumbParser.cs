@@ -13,10 +13,12 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       private readonly List<ConditionCode> conditionalCodes = new List<ConditionCode>();
       private readonly List<IInstruction> instructionTemplates = new List<IInstruction>();
       private readonly PokefireredSymbols pokefireredSymbols;
+      private readonly ProjectLabels projectLabels;
       public ThumbParser(Singletons singletons) {
          conditionalCodes.AddRange(singletons.ThumbConditionalCodes);
          instructionTemplates.AddRange(singletons.ThumbInstructionTemplates);
          pokefireredSymbols = singletons.PokefireredSymbols;
+         projectLabels = singletons.ProjectLabels;
          instructionTemplates.AddRange(new IInstruction[] {
             new ByteInstruction(),
             new HalfWordInstruction(),
@@ -65,7 +67,8 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                            // It may also be a Thumb function pointer (used for an indirect call),
                            // which has bit0 set per the ARM calling convention - value-1 is the
                            // real instruction address in that case.
-                           var symbol = pokefireredSymbols.TryGetSymbol(value) ?? pokefireredSymbols.TryGetFunctionPointerSymbol(value);
+                           var symbol = pokefireredSymbols.TryGetSymbol(value) ?? pokefireredSymbols.TryGetFunctionPointerSymbol(value)
+                                     ?? projectLabels.TryGetSymbol(value) ?? projectLabels.TryGetFunctionPointerSymbol(value);
                            if (!string.IsNullOrEmpty(symbol)) {
                               valueText = $"<{symbol}>";
                            } else if (value > 20100 || value.InRange(0x4000, 20000)) {
@@ -78,8 +81,10 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                         line += gap + $"@ = {valueText}";
                      } else if (string.IsNullOrEmpty(data.GetAnchorFromAddress(-1, address))) {
                         // an un-named branch/call/data target: label it if it's a known pokefirered
-                        // ROM symbol (looked up by the GBA-mapped address, not the raw file offset).
-                        var symbol = pokefireredSymbols.TryGetSymbol(address + BaseModel.PointerOffset);
+                        // or project-specific (e.g. CFRU/DPE) ROM symbol, looked up by the
+                        // GBA-mapped address, not the raw file offset.
+                        var gbaAddress = address + BaseModel.PointerOffset;
+                        var symbol = pokefireredSymbols.TryGetSymbol(gbaAddress) ?? projectLabels.TryGetSymbol(gbaAddress);
                         if (!string.IsNullOrEmpty(symbol)) {
                            var gap = new string(' ', (30 - line.Length).LimitToRange(0, 30));
                            line += gap + $"@ {symbol}";

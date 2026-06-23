@@ -30,6 +30,7 @@ namespace HavenSoft.HexManiac.Core.Models {
       private const string DocReferenceFileName = "resources/docReference.txt";
       private const string PythonUtilityFileName = "resources/hma.py";
       private const string PokefireredSymbolsFileName = "resources/pokefireredReference.txt";
+      private const string ProjectLabelsDirectory = "resources";
 
       public IMetadataInfo MetadataInfo { get; }
       public IReadOnlyDictionary<string, GameReferenceTables> GameReferenceTables { get; }
@@ -44,6 +45,7 @@ namespace HavenSoft.HexManiac.Core.Models {
       public IWorkDispatcher WorkDispatcher { get; }
       public string PythonUtility { get; }
       public PokefireredSymbols PokefireredSymbols { get; }
+      public ProjectLabels ProjectLabels { get; }
       public int CopyLimit { get; }
 
       public Singletons(IWorkDispatcher dispatcher = null, int copyLimit = 40000) {
@@ -60,7 +62,13 @@ namespace HavenSoft.HexManiac.Core.Models {
          PythonUtility = File.ReadAllText(PythonUtilityFileName);
          var pokefireredText = File.Exists(PokefireredSymbolsFileName) ? File.ReadAllText(PokefireredSymbolsFileName) : string.Empty;
          PokefireredSymbols = new PokefireredSymbols(WorkDispatcher, pokefireredText);
+         ProjectLabels = new ProjectLabels(LoadProjectLabelFiles());
          CopyLimit = copyLimit;
+      }
+
+      private static IEnumerable<string> LoadProjectLabelFiles() {
+         if (!Directory.Exists(ProjectLabelsDirectory)) return Enumerable.Empty<string>();
+         return Directory.GetFiles(ProjectLabelsDirectory, "*.ini").Select(File.ReadAllText).ToArray();
       }
 
       public Singletons(IMetadataInfo metadataInfo, IReadOnlyDictionary<string, GameReferenceTables> gameReferenceTables, int copyLimit = 40000) : this(metadataInfo, gameReferenceTables, null, copyLimit) { }
@@ -80,6 +88,7 @@ namespace HavenSoft.HexManiac.Core.Models {
          CopyLimit = copyLimit;
          PythonUtility = string.Empty;
          PokefireredSymbols = new PokefireredSymbols(WorkDispatcher, string.Empty);
+         ProjectLabels = new ProjectLabels();
       }
 
       private IReadOnlyList<IScriptLine> LoadScriptReference<TLine>(string file) where TLine : ScriptLine {
