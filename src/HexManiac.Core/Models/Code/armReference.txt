@@ -124,3 +124,4 @@ nv=1111  @    never
 11111 #11 11110 #11 |     bl    #=pc+#*2+4     @ The 22 numeric bits go together and act as a single signed 22-bit number
                                                @ If I want to branch-link, I need the space of 2 instructions, or a register for blx
                                                @ conditional branching cannot link
+11101 #11 11110 #11 |     blx   #=pc+#*2+4
