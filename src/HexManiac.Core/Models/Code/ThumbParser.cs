@@ -61,33 +61,32 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                         var anchor = data.GetAnchorFromAddress(-1, value - BaseModel.PointerOffset);
                         if (!string.IsNullOrEmpty(anchor)) {
                            valueText = $"<{anchor}>";
-                        } else {
+                        } else if (value > 20100 || value.InRange(0x4000, 20000)) {
+                           valueText = $"0x{value:X8}";
+                        } else if (value < -10000) {
+                           valueText = $"0x{(uint)value:X8}";
+                        }
+                        if (string.IsNullOrEmpty(anchor)) {
                            // a .word/ldr literal is frequently a raw pointer (often a RAM address
                            // like 0x02xxxxxx EWRAM), so look it up as-is rather than as a file offset.
                            // It may also be a Thumb function pointer (used for an indirect call),
                            // which has bit0 set per the ARM calling convention - value-1 is the
-                           // real instruction address in that case.
+                           // real instruction address in that case. Keep the address visible and
+                           // add the symbol name alongside it (don't replace one with the other).
                            var symbol = pokefireredSymbols.TryGetSymbol(value) ?? pokefireredSymbols.TryGetFunctionPointerSymbol(value)
                                      ?? projectLabels.TryGetSymbol(value) ?? projectLabels.TryGetFunctionPointerSymbol(value);
-                           if (!string.IsNullOrEmpty(symbol)) {
-                              valueText = $"<{symbol}>";
-                           } else if (value > 20100 || value.InRange(0x4000, 20000)) {
-                              valueText = $"0x{value:X8}";
-                           } else if (value < -10000) {
-                              valueText = $"0x{(uint)value:X8}";
-                           }
+                           if (!string.IsNullOrEmpty(symbol)) valueText += $" ({symbol})";
                         }
-                        var gap = new string(' ', (30 - line.Length).LimitToRange(0, 30));
-                        line += gap + $"@ = {valueText}";
+                        line = AppendInlineComment(line, $"@ = {valueText}");
                      } else if (string.IsNullOrEmpty(data.GetAnchorFromAddress(-1, address))) {
                         // an un-named branch/call/data target: label it if it's a known pokefirered
                         // or project-specific (e.g. CFRU/DPE) ROM symbol, looked up by the
-                        // GBA-mapped address, not the raw file offset.
+                        // GBA-mapped address, not the raw file offset. Show the address alongside
+                        // the symbol name, matching how HMA already labels known ROM anchors.
                         var gbaAddress = address + BaseModel.PointerOffset;
                         var symbol = pokefireredSymbols.TryGetSymbol(gbaAddress) ?? projectLabels.TryGetSymbol(gbaAddress);
                         if (!string.IsNullOrEmpty(symbol)) {
-                           var gap = new string(' ', (30 - line.Length).LimitToRange(0, 30));
-                           line += gap + $"@ {symbol}";
+                           line = AppendInlineComment(line, $"@ 0x{gbaAddress:X8} ({symbol})");
                         }
                      }
                   }
@@ -143,6 +142,20 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
          // part 3: aggregate / return
          foreach (var line in parsedLines) parseResult.AppendLine(line);
          return parseResult.ToString();
+      }
+
+      /// <summary>
+      /// Appends a right-aligned "@ comment" to the first physical line of an instruction's
+      /// disassembly text. Some instructions (e.g. 4-byte bl) pad their text with trailing
+      /// newlines to keep later lines aligned to their byte address - appending blindly with
+      /// `+=` would land the comment on that blank continuation line instead of the mnemonic.
+      /// </summary>
+      private static string AppendInlineComment(string line, string comment) {
+         var newlineIndex = line.IndexOf(Environment.NewLine);
+         var firstLine = newlineIndex < 0 ? line : line.Substring(0, newlineIndex);
+         var rest = newlineIndex < 0 ? string.Empty : line.Substring(newlineIndex);
+         var gap = new string(' ', (30 - firstLine.Length).LimitToRange(0, 30));
+         return firstLine + gap + comment + rest;
       }
 
       /// <returns>
