@@ -147,36 +147,73 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       }
 
       /// <summary>
+      /// Finds the IScriptArg (and its raw text) that the caret is currently within, by tokenizing
+      /// the whole line and walking token-by-token (same approach as TryGetSourceInfo) rather than
+      /// just grabbing whitespace-delimited text around the caret - that's required to know which
+      /// arg's EnumTableName applies, since flag/variable values are usually displayed as names
+      /// (e.g. "VAR_RESULT") rather than raw numbers.
+      /// </summary>
+      private bool TryGetArgAtCaret(out IScriptArg arg, out string token) {
+         arg = null;
+         token = null;
+         if (CaretPosition < 0 || model.SpartanMode) return false;
+         var context = SplitCurrentLine();
+         if (context.ContentBoundaryCount != 0) return false;
+         var tokens = ScriptLine.Tokenize(context.Line);
+         var tokenIndex = 0;
+         var caret = 0;
+         while (caret < context.Index) {
+            if (context.Line[caret] == ' ') {
+               caret++;
+               continue;
+            }
+            caret += tokens[tokenIndex].Length;
+            if (caret >= context.Index) break;
+            tokenIndex++;
+         }
+         if (tokenIndex == 0 || tokenIndex >= tokens.Length) return false;
+         var line = parser.FirstMatch(context.Line.Trim());
+         if (line == null) return false;
+         token = tokens[tokenIndex];
+         var args = line.Args;
+         if (line is MacroScriptLine macro) {
+            args = macro.ShortFormArgs;
+            tokenIndex -= 1;
+         } else if (line is ScriptLine script) {
+            tokenIndex -= script.LineCode.Count;
+         }
+         if (args.Count <= tokenIndex || tokenIndex < 0) return false;
+         arg = args[tokenIndex];
+         return true;
+      }
+
+      /// <summary>
+      /// Flag/variable args are usually shown as names (from the arg's EnumTableName), not raw
+      /// numbers, so a plain int-parse of the token text isn't enough.
+      /// </summary>
+      private bool TryResolveFlagOrVarValue(IScriptArg arg, string token, out int value) {
+         if (token.TryParseInt(out value)) return true;
+         if (!string.IsNullOrEmpty(arg.EnumTableName) && ArrayRunEnumSegment.TryParse(arg.EnumTableName, model, token, out value)) return true;
+         value = 0;
+         return false;
+      }
+
+      /// <summary>
       /// true if the user right-clicked on a variable or flag
       /// </summary>
       public bool CanFindUses {
          get {
-            if (CaretPosition < 0 || model.SpartanMode) return false;
-            var context = SplitCurrentLine();
-            if (context.ContentBoundaryCount != 0) return false;
-            int left = context.Index, right = context.Index;
-            while (left.InRange(1, context.Line.Length) && context.Line[left] != ' ') left--;
-            while (right < context.Line.Length && context.Line[right] != ' ') right++;
-            var token = context.Line.Substring(left, right - left).Trim();
-            if (!token.TryParseInt(out int value)) return false;
-            var line = parser.FirstMatch(context.Line.Trim());
-            if (line == null) return false;
-            if (line.Args.All(arg => arg.Name != "variable" && arg.Name != "flag")) return false;
-            return true;
+            if (!TryGetArgAtCaret(out var arg, out var token)) return false;
+            if (arg.Name != "variable" && arg.Name != "flag") return false;
+            return TryResolveFlagOrVarValue(arg, token, out var _);
          }
       }
 
       public void FindUses() {
-         var context = SplitCurrentLine();
-         if (context.ContentBoundaryCount != 0) return;
-         int left = context.Index, right = context.Index;
-         while (right < context.Line.Length && context.Line[right] != ' ') right++;
-         while (left.InRange(0, context.Line.Length) && context.Line[left] != ' ') left--;
-         var token = context.Line.Substring(left, right - left).Trim();
-         if (!token.TryParseInt(out int value)) return;
-         var line = parser.FirstMatch(context.Line.Trim());
-         if (line == null) return;
-         if (value < 0x4000) {
+         if (!TryGetArgAtCaret(out var arg, out var token)) return;
+         if (arg.Name != "variable" && arg.Name != "flag") return;
+         if (!TryResolveFlagOrVarValue(arg, token, out var value)) return;
+         if (arg.Name == "flag") {
             var flags = Flags.FindFlagUsages(model, parser, value);
             RequestShowSearchResult.Raise(this, flags);
          } else {
