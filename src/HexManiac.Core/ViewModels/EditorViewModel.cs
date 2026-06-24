@@ -42,6 +42,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          exportBackup = new StubCommand(),
          saveAll = new StubCommand(),
          runFile = new StubCommand(),
+         importSprite = new StubCommand(),
+         importTileset = new StubCommand(),
+         importTilemap = new StubCommand(),
+         importPalette = new StubCommand(),
          close = new StubCommand(),
          closeAll = new StubCommand(),
 
@@ -94,6 +98,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       public ICommand SaveAll => saveAll;
       public ICommand ExportBackup => exportBackup;
       public ICommand RunFile => runFile;
+      public ICommand ImportSprite => importSprite;
+      public ICommand ImportTileset => importTileset;
+      public ICommand ImportTilemap => importTilemap;
+      public ICommand ImportPalette => importPalette;
       public ICommand Close => close;
       public ICommand CloseAll => closeAll;
       public ICommand Undo => undo;
@@ -684,6 +692,11 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
             ((IFileSystem)arg).LaunchProcess(((IEditableViewPort)tab).FullFileName);
          };
 
+         ImplementImportCommand(importSprite, FreeSpaceImporter.ImportSprite);
+         ImplementImportCommand(importTileset, FreeSpaceImporter.ImportTileset);
+         ImplementImportCommand(importTilemap, FreeSpaceImporter.ImportTilemap);
+         ImplementImportCommand(importPalette, FreeSpaceImporter.ImportPalette);
+
          ImplementFindCommands();
 
          showHexConverter.CanExecute = CanAlwaysExecute;
@@ -805,6 +818,19 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          }
          Add(viewPort);
          return viewPort;
+      }
+
+      private void ImplementImportCommand(StubCommand command, Action<ViewPort, IFileSystem> import) {
+         command.CanExecute = arg => {
+            var tab = SelectedTab;
+            if (tab is MapEditorViewModel mapper) tab = mapper.ViewPort;
+            return tab is ViewPort;
+         };
+         command.Execute = arg => {
+            var tab = SelectedTab;
+            if (tab is MapEditorViewModel mapper) tab = mapper.ViewPort;
+            import((ViewPort)tab, (IFileSystem)arg);
+         };
       }
 
       private void ImplementFindCommands() {

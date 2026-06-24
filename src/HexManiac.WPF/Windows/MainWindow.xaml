@@ -117,6 +117,13 @@
                   <MenuItem Header="Calculate Common _Hashes" Command="{hsv:MethodCommand CalculateHashes}" />
                   <MenuItem Header="_Run" Command="{Binding RunFile}" InputGestureText="F5" CommandParameter="{DynamicResource FileSystem}"/>
                   <Separator />
+                  <MenuItem Header="_Import">
+                     <MenuItem Header="_Sprite..." Command="{Binding ImportSprite}" CommandParameter="{DynamicResource FileSystem}" />
+                     <MenuItem Header="_Tileset..." Command="{Binding ImportTileset}" CommandParameter="{DynamicResource FileSystem}" />
+                     <MenuItem Header="Tile_map..." Command="{Binding ImportTilemap}" CommandParameter="{DynamicResource FileSystem}" />
+                     <MenuItem Header="_Palette..." Command="{Binding ImportPalette}" CommandParameter="{DynamicResource FileSystem}" />
+                  </MenuItem>
+                  <Separator />
                   <MenuItem Header="_Close Current Tab" Command="{Binding Close}" CommandParameter="{DynamicResource FileSystem}" InputGestureText="Ctrl+W" />
                   <MenuItem Header="E_xit" Click="ExitClicked" InputGestureText="Alt+F4">
                      <MenuItem.Icon>
