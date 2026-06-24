@@ -137,6 +137,21 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
          return table[value - EnumOffset];
       }
 
+      /// <summary>
+      /// Tables of well-known named constants (species/moves/items/trainers/...) that a plain
+      /// numeric arg (no EnumTableName of its own, e.g. setvar's "value") may reference by name,
+      /// so script authors can write `setvar VAR_0x8004 Bulbasaur` instead of looking up the ID.
+      /// Only consulted once the arg's own EnumTableName (if any) and plain numeric parsing have
+      /// both already failed, so this can never change how a previously-valid token compiles.
+      /// </summary>
+      private static readonly string[] GlobalConstantTables = {
+         "data.pokemon.names",
+         "data.pokemon.moves.names",
+         "data.items.stats",
+         "data.trainers.classes.names",
+         "data.trainers.stats",
+      };
+
       private string Convert(IDataModel model, string value, out int result) {
          result = 0;
          var parseType = "as a number";
@@ -155,6 +170,10 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
          ) {
             result += EnumOffset;
             return null;
+         }
+         foreach (var table in GlobalConstantTables) {
+            if (table == EnumTableName) continue;
+            if (ArrayRunEnumSegment.TryParse(table, model, value, out result)) return null;
          }
          return $"Could not parse '{value}' {parseType}.";
       }
