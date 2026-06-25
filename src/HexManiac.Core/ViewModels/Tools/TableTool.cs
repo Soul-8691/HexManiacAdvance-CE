@@ -102,23 +102,35 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       public FilteringComboOptions CurrentElementSelector { get; }
 
       private readonly StubCommand previous, next, append;
-      private StubCommand incrementAdd, decrementAdd;
+      private StubCommand incrementAdd, decrementAdd, openAsGrid;
       public ICommand Previous => previous;
       public ICommand Next => next;
       public ICommand Append => append;
       public ICommand IncrementAdd => StubCommand(ref incrementAdd, IncrementAddExecute, IncrementAddCanExecute);
       public ICommand DecrementAdd => StubCommand(ref decrementAdd, DecrementAddExecute, DecrementAddCanExecute);
+      public ICommand OpenAsGrid => StubCommand(ref openAsGrid, OpenAsGridExecute, OpenAsGridCanExecute);
       private void CommandCanExecuteChanged() {
          previous.RaiseCanExecuteChanged();
          next.RaiseCanExecuteChanged();
          append.RaiseCanExecuteChanged();
          incrementAdd.RaiseCanExecuteChanged();
          decrementAdd.RaiseCanExecuteChanged();
+         openAsGrid?.RaiseCanExecuteChanged();
       }
       private void IncrementAddExecute() { AddCount += 1; CommandCanExecuteChanged(); }
       private void DecrementAddExecute() { AddCount -= 1; CommandCanExecuteChanged(); }
       private bool IncrementAddCanExecute() => append.CanExecute(null) && addCount < 500;
       private bool DecrementAddCanExecute() => append.CanExecute(null) && addCount > 1;
+      private bool OpenAsGridCanExecute() => Enabled && model.GetNextRun(Address) is ITableRun;
+      private void OpenAsGridExecute() {
+         if (!(model.GetNextRun(Address) is ITableRun array)) return;
+         var tableName = model.GetAnchorFromAddress(-1, array.Start);
+         if (string.IsNullOrEmpty(tableName)) {
+            OnError?.Invoke(this, "This table doesn't have a name and can't be opened as a grid.");
+            return;
+         }
+         viewPort.OpenTableGridTab(tableName);
+      }
 
       private int addCount = 1;
       public int AddCount {

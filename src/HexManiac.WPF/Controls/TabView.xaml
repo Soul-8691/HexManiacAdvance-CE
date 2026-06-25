@@ -312,6 +312,10 @@
                            </RepeatButton>
                         </StackPanel>
                      </StackPanel>
+                     <!-- Open as Grid -->
+                     <Button Content="Open as Grid" Command="{Binding TableTool.OpenAsGrid}"
+                             HorizontalAlignment="Center" Margin="0,4"
+                             ToolTip="Open every row of this table as a sortable, filterable spreadsheet."/>
                      <!-- Items -->
                      <ItemsControl ItemsSource="{Binding TableTool.Groups}" Grid.IsSharedSizeScope="True">
                         <ItemsControl.ItemsPanel>

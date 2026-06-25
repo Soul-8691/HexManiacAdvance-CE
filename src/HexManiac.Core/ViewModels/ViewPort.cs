@@ -2538,6 +2538,13 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          if (!args.RequestAccepted) mapper?.RaiseRequestTabChange(args);
       }
 
+      public void OpenTableGridTab(string tableName) {
+         var newTab = new TableGridTab(fs, this, tableName);
+         var args = new TabChangeRequestedEventArgs(newTab);
+         RequestTabChange(this, args);
+         if (!args.RequestAccepted) mapper?.RaiseRequestTabChange(args);
+      }
+
       public void OpenImageEditorTab(int address, int spritePage, int palettePage, int preferredTileWidth = -1) {
          try {
             var newTab = new ImageEditorViewModel(history, Model, address, Save, tools.SpriteTool.PaletteAddress) {
