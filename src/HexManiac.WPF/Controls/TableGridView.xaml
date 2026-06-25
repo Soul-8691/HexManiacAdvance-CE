@@ -58,17 +58,12 @@
    </UserControl.Resources>
    <DockPanel>
       <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Secondary}">
-         <StackPanel Orientation="Horizontal">
-            <TextBlock Text="Sort by:" VerticalAlignment="Center" Margin="4,0"/>
+         <StackPanel>
+            <TextBlock Text="Sort by:" Margin="4,2"/>
             <ItemsControl ItemsSource="{Binding SortRules}">
-               <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                     <StackPanel Orientation="Horizontal"/>
-                  </ItemsPanelTemplate>
-               </ItemsControl.ItemsPanel>
                <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                     <StackPanel Orientation="Horizontal" Margin="2">
+                     <StackPanel Orientation="Horizontal" Margin="4,1">
                         <ComboBox ItemsSource="{Binding AvailableColumns}" SelectedItem="{Binding ColumnName}" Width="110"/>
                         <ComboBox ItemsSource="{Binding AvailableDirections}" SelectedItem="{Binding DirectionText}" Width="90" Margin="2,0,0,0"/>
                         <Button Content="x" Width="20" Margin="2,0,0,0"
@@ -78,22 +73,19 @@
                   </DataTemplate>
                </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Button Content="+ Add sort column" Margin="4,0" Command="{Binding AddSortRule}"/>
+            <Button Content="+ Add sort column" Margin="4,2" HorizontalAlignment="Left" Command="{Binding AddSortRule}"/>
          </StackPanel>
       </Border>
       <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Secondary}">
-         <StackPanel Orientation="Horizontal">
-            <TextBlock Text="Filters (AND):" VerticalAlignment="Center" Margin="4,0"/>
+         <StackPanel>
+            <TextBlock Text="Filters:" Margin="4,2"/>
             <ItemsControl ItemsSource="{Binding FilterRules}">
-               <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                     <StackPanel Orientation="Horizontal"/>
-                  </ItemsPanelTemplate>
-               </ItemsControl.ItemsPanel>
                <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                     <StackPanel Orientation="Horizontal" Margin="2">
-                        <ComboBox ItemsSource="{Binding AvailableColumns}" SelectedItem="{Binding ColumnName}" Width="110"/>
+                     <StackPanel Orientation="Horizontal" Margin="4,1">
+                        <ComboBox ItemsSource="{Binding AvailableCombineModes}" SelectedItem="{Binding CombineModeText}" Width="55"
+                                  ToolTip="How this filter combines with everything before it (ignored for the first filter)."/>
+                        <ComboBox ItemsSource="{Binding AvailableColumns}" SelectedItem="{Binding ColumnName}" Width="110" Margin="2,0,0,0"/>
                         <ComboBox ItemsSource="{Binding AvailableOperators}" SelectedItem="{Binding OperatorText}" Width="100" Margin="2,0,0,0"/>
                         <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="80" Margin="2,0,0,0"/>
                         <Button Content="x" Width="20" Margin="2,0,0,0"
@@ -103,7 +95,7 @@
                   </DataTemplate>
                </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Button Content="+ Add filter" Margin="4,0" Command="{Binding AddFilterRule}"/>
+            <Button Content="+ Add filter" Margin="4,2" HorizontalAlignment="Left" Command="{Binding AddFilterRule}"/>
          </StackPanel>
       </Border>
       <DataGrid Name="RowsGrid" ItemsSource="{Binding Rows}"

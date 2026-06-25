@@ -136,9 +136,9 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          IEnumerable<GridRowViewModel> source = Enumerable.Range(0, currentTable.ElementCount)
             .Select(i => new GridRowViewModel(this, i));
 
-         foreach (var filter in FilterRules) {
-            if (string.IsNullOrEmpty(filter.ColumnName)) continue;
-            source = source.Where(filter.Matches);
+         var activeFilters = FilterRules.Where(f => !string.IsNullOrEmpty(f.ColumnName)).ToList();
+         if (activeFilters.Count > 0) {
+            source = source.Where(row => EvaluateFilterChain(activeFilters, row));
          }
 
          var sortRules = SortRules.Where(r => !string.IsNullOrEmpty(r.ColumnName)).ToList();
@@ -158,6 +158,18 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          var rows = source.ToList();
          Rows.Clear();
          foreach (var row in rows) Rows.Add(row);
+      }
+
+      // Evaluated strictly left-to-right (no AND-before-OR precedence grouping): each rule's own
+      // CombineMode says how it joins with everything accumulated so far. The first rule has
+      // nothing before it to combine with, so its CombineMode is ignored.
+      private static bool EvaluateFilterChain(IReadOnlyList<FilterRule> filters, GridRowViewModel row) {
+         var result = filters[0].Matches(row);
+         for (int i = 1; i < filters.Count; i++) {
+            var matches = filters[i].Matches(row);
+            result = filters[i].CombineMode == FilterCombineMode.Or ? (result || matches) : (result && matches);
+         }
+         return result;
       }
 
       private IComparable SortKey(GridRowViewModel row, string column) {
@@ -299,9 +311,19 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
 
    public enum FilterOperator { Equals, Contains, GreaterThan, LessThan }
 
+   public enum FilterCombineMode { And, Or }
+
    public class FilterRule : ViewModelCore {
       public IReadOnlyList<string> AvailableColumns { get; }
       public IReadOnlyList<string> AvailableOperators { get; } = new[] { "Equals", "Contains", "GreaterThan", "LessThan" };
+      public IReadOnlyList<string> AvailableCombineModes { get; } = new[] { "AND", "OR" };
+
+      // How this rule joins with everything before it in the chain. Meaningless for the first
+      // rule in the list (nothing precedes it), but every rule still carries one so that moving
+      // rules around / adding new ones ahead of it doesn't lose the setting.
+      private string combineModeText = "AND";
+      public string CombineModeText { get => combineModeText; set => Set(ref combineModeText, value); }
+      public FilterCombineMode CombineMode => CombineModeText == "OR" ? FilterCombineMode.Or : FilterCombineMode.And;
 
       private string columnName;
       public string ColumnName { get => columnName; set => Set(ref columnName, value); }
