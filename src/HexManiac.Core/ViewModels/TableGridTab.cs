@@ -182,8 +182,14 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          return seg.Type == ElementContentType.Integer;
       }
 
-      public IReadOnlyList<string> GetEnumOptions(string columnName) =>
-         (FindSegment(columnName) as ArrayRunEnumSegment)?.GetOptions(model) ?? Array.Empty<string>();
+      // Sparse [[List]] entries in the .toml leave gap indices as null (filled in only when
+      // displaying an existing value, via the ToText/Serialize "?? index.ToString()" fallback) -
+      // those gaps aren't real named options, so they're excluded from the dropdown's choices.
+      public IReadOnlyList<string> GetEnumOptions(string columnName) {
+         var seg = FindSegment(columnName) as ArrayRunEnumSegment;
+         if (seg == null) return Array.Empty<string>();
+         return seg.GetOptions(model).Where(o => o != null).ToList();
+      }
 
       public bool IsEditableColumn(string columnName) {
          var seg = FindSegment(columnName);
