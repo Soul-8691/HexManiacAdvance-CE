@@ -143,7 +143,10 @@ namespace HavenSoft.HexManiac.WPF.Controls {
             ClearAutocompleteOptions();
          }
 
-         if (e.Key == Key.Space || e.Key == Key.OemQuotes) {
+         // Python identifiers/expressions are free-form (unlike script commands' fixed
+         // vocabulary), so typing a plain space or quote must never silently rewrite the line -
+         // only an explicit accept (Enter or clicking a suggestion) should apply a completion.
+         if ((e.Key == Key.Space || e.Key == Key.OemQuotes) && DataContext is not PythonTool) {
             var caretIndex = TargetTextBox.CaretIndex;
             var lines = TargetTextBox.Text.Split(Environment.NewLine);
             var lineIndex = 0;
