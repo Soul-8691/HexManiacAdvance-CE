@@ -64,6 +64,22 @@ namespace HavenSoft.HexManiac.WPF.Controls {
          }
       }
 
+      // Captured on right-click rather than read off the context menu's DataContext - a
+      // ContextMenu is a Popup, not part of the DataGrid's visual tree, so binding its way
+      // back to "whichever row was under the cursor" through PlacementTarget is unreliable
+      // once rows start getting virtualized/recycled. Reading the row off the mouse-down
+      // event directly (same approach as RowDoubleClick) is simple and always correct.
+      private GridRowViewModel rightClickedRow;
+
+      private void GridRightButtonDown(object sender, MouseButtonEventArgs e) {
+         var row = FindAncestor<DataGridRow>(e.OriginalSource as DependencyObject);
+         rightClickedRow = row?.Item as GridRowViewModel;
+      }
+
+      private void GotoRowClick(object sender, RoutedEventArgs e) {
+         if (rightClickedRow != null) ViewModel?.GotoRow(rightClickedRow);
+      }
+
       private void CellEditEnding(object sender, DataGridCellEditEndingEventArgs e) {
          // Defer until after the binding commit finishes, so RecomputeRows (which replaces the
          // Rows collection) doesn't run while the DataGrid is still mid-commit of this edit.

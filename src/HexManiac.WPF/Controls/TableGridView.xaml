@@ -110,7 +110,8 @@
                 Foreground="{DynamicResource Text1}"
                 RowBackground="{DynamicResource Background}"
                 MouseDoubleClick="RowDoubleClick"
-                CellEditEnding="CellEditEnding">
+                CellEditEnding="CellEditEnding"
+                PreviewMouseRightButtonDown="GridRightButtonDown">
          <DataGrid.CellStyle>
             <Style TargetType="DataGridCell">
                <Setter Property="Foreground" Value="{DynamicResource Text1}"/>
@@ -133,6 +134,11 @@
                <Setter Property="Background" Value="{DynamicResource Background}"/>
             </Style>
          </DataGrid.RowHeaderStyle>
+         <DataGrid.ContextMenu>
+            <ContextMenu>
+               <MenuItem Header="Go to Address in Main Editor" Click="GotoRowClick"/>
+            </ContextMenu>
+         </DataGrid.ContextMenu>
       </DataGrid>
    </DockPanel>
 </UserControl>
