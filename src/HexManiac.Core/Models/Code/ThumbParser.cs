@@ -14,6 +14,7 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       private readonly List<IInstruction> instructionTemplates = new List<IInstruction>();
       private readonly PokefireredSymbols pokefireredSymbols;
       private readonly ProjectLabels projectLabels;
+      private Instruction blTemplate;
       public ThumbParser(Singletons singletons) {
          conditionalCodes.AddRange(singletons.ThumbConditionalCodes);
          instructionTemplates.AddRange(singletons.ThumbInstructionTemplates);
@@ -27,6 +28,45 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
             new SkipInstruction(),
          });
       }
+
+      /// <summary>
+      /// Scans [start, start+length) for `bl` (branch-and-link) instructions, yielding each
+      /// one's own address paired with its resolved target. Only the bl template's own
+      /// Matches() is checked per address (not the full ~300-template FirstOrDefault used by
+      /// Parse), keeping a full-ROM scan to a single cheap bitmask check per 2-byte-aligned
+      /// position. Disassemble() is reused (not reimplemented) to resolve the actual target,
+      /// since bl's two-halfword PC-relative encoding is easy to get subtly wrong by hand.
+      /// </summary>
+      private IEnumerable<(int address, int target)> ScanBranchLinks(IDataModel data, int start, int length) {
+         blTemplate ??= instructionTemplates.OfType<Instruction>().FirstOrDefault(i => i.Operator == "bl");
+         if (blTemplate == null) yield break;
+         var end = Math.Min(data.Count, start + length);
+         for (int address = start; address + blTemplate.ByteLength <= end; address += 2) {
+            if (!blTemplate.Matches(data, address)) continue;
+            var line = blTemplate.Disassemble(data, address, conditionalCodes);
+            if (!line.Contains("<") || !line.Contains(">")) continue;
+            var content = line.Split('<')[1].Split('>')[0];
+            var resolved = data.GetAddressFromAnchor(new NoDataChangeDeltaModel(), -1, content);
+            if (resolved == Pointer.NULL && !content.TryParseHex(out resolved)) continue;
+            yield return (address, resolved);
+         }
+      }
+
+      /// <summary>
+      /// Finds every `bl` instruction in the whole model whose target is targetAddress, so
+      /// callers of a function show up alongside literal pointer sources when right-clicking
+      /// its anchor.
+      /// </summary>
+      public IReadOnlyList<int> FindBranchLinkSources(IDataModel data, int targetAddress) =>
+         ScanBranchLinks(data, 0, data.Count).Where(pair => pair.target == targetAddress).Select(pair => pair.address).ToList();
+
+      /// <summary>
+      /// Finds every distinct address targeted by a `bl` instruction within [start, start+length) -
+      /// used to auto-anchor function-call targets as code gets viewed, so FindBranchLinkSources
+      /// has an anchor to attach to later.
+      /// </summary>
+      public IReadOnlyList<int> FindBranchLinkTargets(IDataModel data, int start, int length) =>
+         ScanBranchLinks(data, start, length).Select(pair => pair.target).Distinct().ToList();
 
       private readonly StringBuilder parseResult = new StringBuilder();
       private readonly List<string> parsedLines = new List<string>();

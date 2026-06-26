@@ -2527,7 +2527,11 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          title = "Sources of " + title;
          var newTab = new SearchResultsViewPort(title);
 
-         foreach (var source in run.PointerSources) newTab.Add(CreateChildView(source, source), source, source);
+         // include bl (branch-and-link) callers alongside literal pointer sources - see
+         // ContextItemFactory.GetAnchorSourceItems, which this should match.
+         var blSources = Tools.CodeTool.Parser.FindBranchLinkSources(Model, address);
+         var allSources = (run.PointerSources ?? SortedSpan<int>.None).Add(new SortedSpan<int>(blSources));
+         foreach (var source in allSources) newTab.Add(CreateChildView(source, source), source, source);
 
          RequestTabChange(this, new(newTab));
          RequestMenuClose?.Invoke(this, EventArgs.Empty);

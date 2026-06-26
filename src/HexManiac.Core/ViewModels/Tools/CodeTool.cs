@@ -1,6 +1,7 @@
 ﻿using HavenSoft.HexManiac.Core.Models;
 using HavenSoft.HexManiac.Core.Models.Code;
 using HavenSoft.HexManiac.Core.Models.Runs;
+using HavenSoft.HexManiac.Core.ViewModels.DataFormats;
 using HavenSoft.HexManiac.Core.ViewModels.Map;
 using System;
 using System.Collections.Generic;
@@ -184,12 +185,43 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
                UpdateContents(start, battleAIScript);
             } else if (mode == CodeMode.Thumb) {
                Editor.Content = thumb.Parse(model, start, end - start + 1);
+               AutoAnchorBranchLinkTargets(start, end - start + 1);
                NotifyPropertyChanged(nameof(Content));
                CanRepointThumb = CalculateCanRepointThumb();
             } else {
                throw new NotImplementedException();
             }
          }
+      }
+
+      /// <summary>
+      /// Right-clicking an anchor to see "what calls this" (ContextItemFactory.GetAnchorSourceItems)
+      /// only works if an anchor already exists at the target - bl reaches its target via a
+      /// PC-relative offset baked into the instruction, not a stored pointer, so there's nothing
+      /// for the normal pointer-source tracking to find without one. Bare-anchor any bl target
+      /// seen while viewing code, so that lookup has something to attach to without the user
+      /// having to manually anchor every function they look at. Prefer an already-known
+      /// pokefirered/project-label symbol name over the generic "code.XXXXXX" scheme, so a target
+      /// HMA already recognizes (and currently only shows as an inline ASM comment) gets a real,
+      /// meaningfully-named anchor instead of a placeholder one.
+      /// </summary>
+      private void AutoAnchorBranchLinkTargets(int start, int length) {
+         var createdAny = false;
+         foreach (var target in thumb.FindBranchLinkTargets(model, start, length)) {
+            if (target < 0 || target >= model.Count) continue;
+            if (!string.IsNullOrEmpty(model.GetAnchorFromAddress(-1, target))) continue;
+            var existingRun = model.GetNextRun(target);
+            if (existingRun.Start <= target && !(existingRun is NoInfoRun)) continue; // don't clobber a real, differently-formatted run
+
+            var gbaAddress = target + BaseModel.PointerOffset;
+            var symbol = singletons.PokefireredSymbols.TryGetSymbol(gbaAddress) ?? singletons.ProjectLabels.TryGetSymbol(gbaAddress);
+            var nameTaken = !string.IsNullOrEmpty(symbol) && model.GetAddressFromAnchor(history.CurrentChange, -1, symbol) != Pointer.NULL;
+            var name = !string.IsNullOrEmpty(symbol) && !nameTaken ? symbol : $"code.{target:X6}";
+
+            model.ObserveAnchorWritten(history.CurrentChange, name, new NoInfoRun(target));
+            createdAny = true;
+         }
+         if (createdAny) history.ChangeCompleted();
       }
 
       public void ClearConstantCache() {

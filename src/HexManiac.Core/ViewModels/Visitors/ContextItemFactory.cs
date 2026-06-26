@@ -179,18 +179,25 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Visitors {
             var index = (address - run.Start) / array.ElementLength;
             sources = array.PointerSourcesForInnerElements[index];
          }
-         if (sources == null || sources.Count == 0) {
+
+         // also include bl (branch-and-link / function call) instructions targeting this
+         // address - those reference it via a PC-relative offset baked into the instruction,
+         // not a literal pointer value, so they aren't part of PointerSources.
+         var blSources = ViewPort.Tools.CodeTool.Parser.FindBranchLinkSources(ViewPort.Model, address);
+         var allSources = (sources ?? SortedSpan<int>.None).Add(new SortedSpan<int>(blSources));
+
+         if (allSources.Count == 0) {
             yield return new ContextItem("(Nothing points to this.)", null);
             yield break;
          }
 
-         if (sources.Count > 1) {
+         if (allSources.Count > 1) {
             yield return new ContextItem("Show All Sources in new tab", p => {
                ViewPort.FindAllSources(address);
             });
          }
 
-         var destinations = sources.Select(SystemExtensions.ToAddress).ToArray();
+         var destinations = allSources.Select(SystemExtensions.ToAddress).ToArray();
          foreach (var destination in destinations) {
             yield return new ContextItem(destination, ViewPort.Goto.Execute, destination);
          }
