@@ -494,6 +494,38 @@ namespace HavenSoft.HexManiac.Tests {
       }
 
       [Fact]
+      public void SearchText_ContainsHighNibbleWildcard_MatchesAnyLowNibble() {
+         var test = new BaseViewModelTestClass();
+         Array.Copy(new byte[] { 0x20, 0x0A, 0x40 }, test.Model.RawData, 3);
+
+         var results = test.ViewPort.Find("20 0X 40");
+
+         Assert.Single(results);
+         Assert.Equal(0, results[0].start);
+      }
+
+      [Fact]
+      public void SearchText_ContainsLowNibbleWildcard_MatchesAnyHighNibble() {
+         var test = new BaseViewModelTestClass();
+         Array.Copy(new byte[] { 0x20, 0xA0, 0x40 }, test.Model.RawData, 3);
+
+         var results = test.ViewPort.Find("20 X0 40");
+
+         Assert.Single(results);
+         Assert.Equal(0, results[0].start);
+      }
+
+      [Fact]
+      public void SearchText_ContainsNibbleWildcard_DoesNotMatchWrongFixedNibble() {
+         var test = new BaseViewModelTestClass();
+         Array.Copy(new byte[] { 0x20, 0x1A, 0x40 }, test.Model.RawData, 3); // high nibble is 1, not 0
+
+         var results = test.ViewPort.Find("20 0X 40");
+
+         Assert.Empty(results);
+      }
+
+      [Fact]
       public void MultipleResults_CloseTogether_CombineTogether() {
          var test = new BaseViewModelTestClass();
          test.CreateTextTable("options", 0x100, "abc", "def", "ijk", "lmn", "qrs", "tuv", "xyz");

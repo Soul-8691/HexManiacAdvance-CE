@@ -2252,6 +2252,27 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          return result;
       }
 
+      /// <summary>
+      /// Matches a 2-character token where exactly one character is a hex digit and the other is
+      /// 'X' (a nibble wildcard), e.g. "0X" matches any byte 0x00-0x0F, "X0" matches any byte
+      /// ending in 0. Both characters being hex digits or both being 'X' (the full "XX" wildcard,
+      /// handled separately above) are not nibble-wildcard matches.
+      /// </summary>
+      private static bool TryParseNibbleWildcard(char high, char low, out NibbleSearchByte searchByte) {
+         searchByte = null;
+         var highWild = high is 'X' or 'x';
+         var lowWild = low is 'X' or 'x';
+         if (highWild == lowWild) return false; // neither wild (plain hex pair) or both wild ("XX", handled elsewhere)
+         if (!highWild && !AllHexCharacters.Contains(high)) return false;
+         if (!lowWild && !AllHexCharacters.Contains(low)) return false;
+         int? highNibble = highWild ? (int?)null : HexDigitValue(high);
+         int? lowNibble = lowWild ? (int?)null : HexDigitValue(low);
+         searchByte = new NibbleSearchByte(highNibble, lowNibble);
+         return true;
+      }
+
+      private static int HexDigitValue(char hexDigit) => "0123456789ABCDEF".IndexOf(char.ToUpper(hexDigit));
+
       private bool TryParseSearchString(List<ISearchByte> searchBytes, string cleanedSearchString, bool errorOnParseError) {
          for (int i = 0; i < cleanedSearchString.Length;) {
             if (cleanedSearchString[i] == ' ') {
@@ -2270,6 +2291,12 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
 
             if (cleanedSearchString.Length >= i + 2 && cleanedSearchString.Substring(i, 2) == "XX") {
                searchBytes.Add(SearchByte.Wild);
+               i += 2;
+               continue;
+            }
+
+            if (cleanedSearchString.Length >= i + 2 && TryParseNibbleWildcard(cleanedSearchString[i], cleanedSearchString[i + 1], out var nibbleSearchByte)) {
+               searchBytes.Add(nibbleSearchByte);
                i += 2;
                continue;
             }

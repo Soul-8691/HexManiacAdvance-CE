@@ -18,6 +18,19 @@ namespace HavenSoft.HexManiac.Core.Models {
       public bool Match(byte value) => true;
    }
 
+   /// <summary>
+   /// Matches a byte where one nibble is fixed and the other is a wildcard, e.g. "0X" matches
+   /// 0x00-0x0F and "X0" matches 0x00,0x10,0x20,...,0xF0. Pass null for whichever nibble is wild.
+   /// </summary>
+   public class NibbleSearchByte : ISearchByte {
+      private readonly byte mask, target;
+      public NibbleSearchByte(int? highNibble, int? lowNibble) {
+         mask = (byte)((highNibble.HasValue ? 0xF0 : 0) | (lowNibble.HasValue ? 0x0F : 0));
+         target = (byte)(((highNibble ?? 0) << 4) | (lowNibble ?? 0));
+      }
+      public bool Match(byte value) => (value & mask) == target;
+   }
+
    public class PCSSearchByte : ISearchByte {
       private static readonly int CapitalEWithAccent = PCSString.PCS.IndexOf("É");
       private static readonly int LowerEWithAccent = PCSString.PCS.IndexOf("é");
