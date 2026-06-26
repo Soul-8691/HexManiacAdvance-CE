@@ -197,10 +197,15 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       // Sparse [[List]] entries in the .toml leave gap indices as null (filled in only when
       // displaying an existing value, via the ToText/Serialize "?? index.ToString()" fallback) -
       // those gaps aren't real named options, so they're excluded from the dropdown's choices.
+      // Multi-word option names (e.g. "Iron Barbs") come back quoted from GetOptions, but
+      // ModelArrayElement.GetEnumValue (what ReadDisplayValue shows as the cell's current value)
+      // trims quotes off - without matching that here, a quoted option's current value would
+      // never string-match anything in its own dropdown list, so the combobox would show no
+      // selection even when the underlying value is set correctly.
       public IReadOnlyList<string> GetEnumOptions(string columnName) {
          var seg = FindSegment(columnName) as ArrayRunEnumSegment;
          if (seg == null) return Array.Empty<string>();
-         return seg.GetOptions(model).Where(o => o != null).ToList();
+         return seg.GetOptions(model).Where(o => o != null).Select(o => o.Trim('"')).ToList();
       }
 
       public bool IsEditableColumn(string columnName) {
