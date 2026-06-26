@@ -685,7 +685,12 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
             PixelHeight = pixels?.GetLength(1) ?? 0;
          }
          var renderPalette = GetRenderPalette(run);
-         PixelData = Render(pixels, renderPalette, paletteFormat.InitialBlankPages, spritePage);
+         // renderPalette/palette is already resolved to the current row's own page via LoadPalette's
+         // run.GetPalette(model, palPage) - passing spritePage here too double-applies an offset.
+         // That was invisible for 16-color-granularity palettes (spritePage<<4 is always a multiple
+         // of a 16/256-color page, so it canceled out via modulo), but breaks a combined 64-color
+         // ucp6 palette as soon as spritePage isn't itself a multiple of 4 (16*4=64).
+         PixelData = Render(pixels, renderPalette, paletteFormat.InitialBlankPages, 0);
          NotifyPropertyChanged(nameof(PixelWidth));
          NotifyPropertyChanged(nameof(PixelHeight));
          prevSpritePage.RaiseCanExecuteChanged();
@@ -743,7 +748,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
          Colors.SetContents(palette);
          Colors.Page = palPage;
          Colors.HasMultiplePages = palPages > 1;
-         PixelData = Render(pixels, GetRenderPalette(model?.GetNextRun(spriteAddress) as ISpriteRun), paletteFormat.InitialBlankPages, spritePage);
+         // see matching comment in LoadSprite - the fetched palette is already row-resolved.
+         PixelData = Render(pixels, GetRenderPalette(model?.GetNextRun(spriteAddress) as ISpriteRun), paletteFormat.InitialBlankPages, 0);
          NotifyPropertyChanged(nameof(HasMultiplePalettePages));
          NotifyPropertyChanged(nameof(PixelData));
       }

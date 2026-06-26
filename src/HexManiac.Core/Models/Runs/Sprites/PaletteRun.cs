@@ -18,8 +18,7 @@ namespace HavenSoft.HexManiac.Core.Models.Runs.Sprites {
          PaletteFormat = format;
          bits = format.Bits;
          Pages = format.Pages;
-         if (bits == 8) Length = 512;
-         if (bits == 4) Length = Pages * 32;
+         Length = Pages * PaletteFormat.ExpectedByteLengthPerPage;
          var pagesPart = string.Empty;
          if (Pages > 1 || format.InitialBlankPages > 0) {
             pagesPart = ":" + GetPalettePages(format);

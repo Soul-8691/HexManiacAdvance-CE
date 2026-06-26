@@ -29,6 +29,44 @@ namespace HavenSoft.HexManiac.Tests {
          Assert.Equal(2, paletteTable.Pages);
       }
 
+      private void SetupDuelistTables6bpp() {
+         // 6bpp sprites index 0-63 directly, so they need `ucp6` (one combined 64-color
+         // palette), not `ucp4:0123` (4 separately-addressable 16-color pages) - mirrors
+         // SetupDuelistTables but pairs a 6bpp inline sprite table with a `ucp6` inline
+         // palette table. 1x1 tiles (not 3x3, like the 4bpp version) to keep this test's
+         // footprint well inside the 0x400-byte test model.
+         Model.SetList(Token, "duelists", "Yugi", "Kaiba");
+         ViewPort.Goto.Execute(0x00);
+         ViewPort.Edit("^graphics.duelists.icons.palettes6[`ucp6`]duelists ");
+         ViewPort.Goto.Execute(0x100);
+         ViewPort.Edit("^graphics.duelists.icons.sprites6[`ucs6x1x1|graphics.duelists.icons.palettes6`]duelists ");
+      }
+
+      [Fact]
+      public void BarePaletteFormat6bpp_TableLengthFromList_CreatesInlinePaletteTableRunWithCombined64Colors() {
+         SetupDuelistTables6bpp();
+
+         Assert.Empty(Errors);
+         var run = Model.GetNextRun(0x00);
+         var paletteTable = Assert.IsType<InlinePaletteTableRun>(run);
+         Assert.Equal(2, paletteTable.ElementCount);
+         Assert.Equal(128, paletteTable.ElementLength); // 6bpp combined: 64 colors * 2 bytes
+         Assert.Equal(256, paletteTable.Length);
+         Assert.Equal(64, paletteTable.GetPalette(Model, 0).Count);
+      }
+
+      [Fact]
+      public void FindRelatedPalettes_ResolvesCombined6bppPaletteTableFromHint() {
+         SetupDuelistTables6bpp();
+         var spriteRun = (ISpriteRun)Model.GetNextRun(0x100);
+
+         var related = spriteRun.FindRelatedPalettes(Model);
+
+         Assert.Equal(1, related.Count);
+         Assert.IsType<InlinePaletteTableRun>(related[0]);
+         Assert.Equal(0x00, related[0].Start);
+      }
+
       [Fact]
       public void BareSpriteFormat_TableLengthFromList_CreatesInlineSpriteTableRun() {
          SetupDuelistTables();

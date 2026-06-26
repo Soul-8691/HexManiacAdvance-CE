@@ -41,8 +41,8 @@ namespace HavenSoft.HexManiac.Core.Models.Runs.Factory {
       }
 
       public static ErrorInfo IsValid(int bitness) {
-         if (bitness != 4 && bitness != 8) {
-            return new ErrorInfo("Palette bpp must be 4 or 8.");
+         if (!bitness.IsAny(1, 2, 4, 6, 8)) {
+            return new ErrorInfo("Palette bpp must be 1, 2, 4, 6, or 8.");
          }
          return ErrorInfo.NoError;
       }

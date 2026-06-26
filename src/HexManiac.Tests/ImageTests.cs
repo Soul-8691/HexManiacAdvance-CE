@@ -716,6 +716,46 @@ namespace HavenSoft.HexManiac.Tests {
       }
 
       [Fact]
+      public void Ucp6_ParsesAsOneCombined64ColorPalette() {
+         // 6bpp sprites index 0-63 directly into a single palette, unlike `ucp4:0123` (4
+         // independently-addressable 16-color pages) or `ucp8` (one 256-color page) - `ucp6`
+         // is the matching "4 GBA hardware blocks combined into one logical palette" format.
+         ViewPort.Edit("^pal`ucp6` ");
+
+         Assert.Empty(Errors);
+         var run = (IPaletteRun)Model.GetNextRun(0);
+         Assert.Equal(6, run.PaletteFormat.Bits);
+         Assert.Equal(1, run.PaletteFormat.Pages);
+         Assert.Equal(128, run.Length);
+         Assert.Equal(64, run.GetPalette(Model, 0).Count);
+      }
+
+      [Fact]
+      public void Ucp6_SetPaletteRoundTripsAllSixtyFourColors() {
+         ViewPort.Edit("^pal`ucp6` ");
+         var run = (IPaletteRun)Model.GetNextRun(0);
+
+         var colors = new short[64];
+         for (int i = 0; i < 64; i++) colors[i] = (short)i;
+         run.SetPalette(Model, Token, 0, colors);
+
+         var result = run.GetPalette(Model, 0);
+         Assert.Equal(64, result.Count);
+         for (int i = 0; i < 64; i++) Assert.Equal((short)i, result[i]);
+      }
+
+      [Fact]
+      public void Lzp6_ParsesAsOneCombined64ColorPalette() {
+         WriteCompressedData(0, 128);
+         ViewPort.Edit("^pal`lzp6` ");
+
+         Assert.Empty(Errors);
+         var run = (IPaletteRun)Model.GetNextRun(0);
+         Assert.Equal(6, run.PaletteFormat.Bits);
+         Assert.Equal(64, run.GetPalette(Model, 0).Count);
+      }
+
+      [Fact]
       public void CanCreateSpriteFromRightClick() {
          ViewPort.Edit("^anchor 10 20 00 00");
 
