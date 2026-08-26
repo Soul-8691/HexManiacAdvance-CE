@@ -87,5 +87,71 @@ namespace HavenSoft.HexManiac.Tests {
       }
 
       // TODO 'copy' should work correctly when including escape characters, like a leading space, ^, or \
+
+      [Fact]
+      public void AsciiPointerFieldInTable_Create_PointsAtAsciiRun() {
+         ViewPort.Edit("@100 ^table[ptr<`asc`4>]1 <000> ");
+         var run = Model.GetNextRun(0);
+         Assert.IsType<AsciiRun>(run);
+      }
+
+      [Fact]
+      public void AsciiInlineFieldInTable_Create_ParsesAsArrayRun() {
+         ViewPort.Edit("^table[name`asc`4]2 ");
+         var run = Model.GetNextRun(0);
+         Assert.IsType<ArrayRun>(run);
+         var arrayRun = (ArrayRun)run;
+         Assert.Equal(ElementContentType.Ascii, arrayRun.ElementContent[0].Type);
+         Assert.Equal(4, arrayRun.ElementContent[0].Length);
+      }
+
+      [Fact]
+      public void AsciiInlineFieldInTable_ReadWriteViaModelTable_RoundTrips() {
+         ViewPort.Edit("^table[name`asc`4]2 ");
+         var table = Model.GetTableModel("table", () => ViewPort.ChangeHistory.CurrentChange);
+
+         table[0]["name"] = "abcd";
+
+         Assert.Equal((byte)'a', Model[0]);
+         Assert.Equal((byte)'d', Model[3]);
+         Assert.Equal("abcd", table[0]["name"]);
+      }
+
+      [Fact]
+      public void AsciiInlineFieldInTable_CellFormat_IsAscii() {
+         ViewPort.Edit("^table[name`asc`4]2 abcd wxyz ");
+
+         var format = (Ascii)ViewPort[1, 0].Format;
+
+         Assert.Equal("b", format.ThisCharacter);
+      }
+
+      [Fact]
+      public void AsciiInlineFieldInTable_ToText_ReadsRawBytesQuoted() {
+         ViewPort.Edit("^table[name`asc`8]1 ");
+         var bytes = System.Text.Encoding.ASCII.GetBytes("hi there");
+         for (int i = 0; i < bytes.Length; i++) Model[i] = bytes[i];
+
+         var text = ((ArrayRun)Model.GetNextRun(0)).ElementContent[0].ToText(Model, 0);
+
+         Assert.Equal("\"hi there\"", text);
+      }
+
+      // Write() is what TableStreamRun uses to parse a typed row of text (see TableStreamRun.cs:299) -
+      // quoting keeps a space-containing ascii value from being split apart by the space-delimited tokenizer.
+      // A plain fixed-size table's initial content, by contrast, is populated by replaying keystrokes through
+      // the interactive cell editor, which never calls Write and treats '"' as a literal ascii character
+      // (matching the existing top-level AsciiRun cell-editing behavior).
+      [Fact]
+      public void AsciiInlineFieldInTable_Write_ParsesQuotedTextWithSpaces() {
+         ViewPort.Edit("^table[name`asc`8]1 ");
+         var run = (ArrayRun)Model.GetNextRun(0);
+         var segment = run.ElementContent[0];
+         var data = "\"hi there\"";
+
+         segment.Write(run.ElementContent, Model, new ModelDelta(), 0, ref data);
+
+         Assert.Equal("hi there", segment.ToText(Model, 0).Trim('"'));
+      }
    }
 }

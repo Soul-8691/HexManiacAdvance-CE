@@ -90,6 +90,8 @@ namespace HavenSoft.HexManiac.Core.Models {
          var seg = table.ElementContent.Single(segment => segment.Name == fieldName);
          if (seg.Type == ElementContentType.PCS) {
             return model.TextConverter.Convert(model, valueAddress, seg.Length).Trim('"');
+         } else if (seg.Type == ElementContentType.Ascii) {
+            return GetAsciiValue(valueAddress, seg.Length);
          } else if (seg.Type == ElementContentType.Pointer) {
             valueAddress = model.ReadPointer(valueAddress);
             if (valueAddress < 0 || valueAddress >= model.Count) return string.Empty;
@@ -99,6 +101,12 @@ namespace HavenSoft.HexManiac.Core.Models {
          } else {
             throw new NotImplementedException();
          }
+      }
+
+      private string GetAsciiValue(int address, int length) {
+         var chars = new char[length];
+         for (int i = 0; i < length; i++) chars[i] = (char)model[address + i];
+         return new string(chars);
       }
 
       public string Serialize(string fieldName) {
@@ -117,6 +125,7 @@ namespace HavenSoft.HexManiac.Core.Models {
             return destination.ToAddress();
          }
          if (seg.Type == ElementContentType.PCS) return GetStringValue(fieldName);
+         if (seg.Type == ElementContentType.Ascii) return GetStringValue(fieldName);
          if (seg is ArrayRunEnumSegment) return GetEnumValue(fieldName);
          return GetValue(fieldName).ToString();
       }
@@ -236,6 +245,7 @@ namespace HavenSoft.HexManiac.Core.Models {
                return address;
             }
             if (seg.Type == ElementContentType.PCS) return GetStringValue(fieldName);
+            if (seg.Type == ElementContentType.Ascii) return GetStringValue(fieldName);
             if (seg is ArrayRunTupleSegment tuple) {
                return new ModelTupleElement(model, table, arrayIndex, segmentOffset, tuple, tokenFactory);
             }
@@ -257,6 +267,7 @@ namespace HavenSoft.HexManiac.Core.Models {
                   SetAddress(fieldName, RequireInt(value, fieldName));
                }
             } else if (seg.Type == ElementContentType.PCS) SetStringValue(fieldName, (string)value);
+            else if (seg.Type == ElementContentType.Ascii) SetStringValue(fieldName, (string)value);
             else SetValue(fieldName, RequireInt(value, fieldName));
          }
       }
@@ -306,6 +317,10 @@ namespace HavenSoft.HexManiac.Core.Models {
             while (bytes.Count > seg.Length) bytes.RemoveAt(bytes.Count - 1);
             bytes[bytes.Count - 1] = 0xFF;
             while (bytes.Count < seg.Length) bytes.Add(0);
+            token.ChangeData(model, valueAddress, bytes);
+         } else if (seg.Type == ElementContentType.Ascii) {
+            var bytes = new byte[seg.Length];
+            for (int i = 0; i < seg.Length; i++) bytes[i] = i < value.Length ? (byte)value[i] : (byte)0;
             token.ChangeData(model, valueAddress, bytes);
          } else if (seg.Type == ElementContentType.Pointer) {
             valueAddress = model.ReadPointer(valueAddress);

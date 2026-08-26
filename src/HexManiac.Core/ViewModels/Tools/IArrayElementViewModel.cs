@@ -181,6 +181,24 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       }
    }
 
+   public class AsciiFieldStrategy : IFieldArrayElementViewModelStrategy {
+      public static AsciiFieldStrategy Instance { get; } = new AsciiFieldStrategy();
+      public ElementContentViewModelType Type => ElementContentViewModelType.TextField;
+
+      public void UpdateModelFromViewModel(FieldArrayElementViewModel viewModel) {
+         for (int i = 0; i < viewModel.Length; i++) {
+            var value = i < viewModel.Content.Length ? (byte)viewModel.Content[i] : (byte)0;
+            viewModel.ViewPort.CurrentChange.ChangeData(viewModel.Model, viewModel.Start + i, value);
+         }
+      }
+
+      public string UpdateViewModelFromModel(FieldArrayElementViewModel viewModel) {
+         var chars = new char[viewModel.Length];
+         for (int i = 0; i < viewModel.Length; i++) chars[i] = (char)viewModel.Model[viewModel.Start + i];
+         return new string(chars);
+      }
+   }
+
    public class NumericFieldStrategy : IFieldArrayElementViewModelStrategy {
       public static NumericFieldStrategy Instance { get; } = new NumericFieldStrategy();
       public ElementContentViewModelType Type => ElementContentViewModelType.NumericField;

@@ -15,7 +15,7 @@
 // |s         switch/record. Value type depends on other fields
 // |b[]       bit-array (1-bit per value, labeled after an enum or list)
 // <>         pointer
-// `asc`10    10 ascii characters
+// `asc`10    10 ascii characters, fixed length (usable inline like ""10, or as a pointer destination like <`asc`10>)
 // `ucp`      uncompressed palette
 // `lzp4`     compressed palette
 // `lzs4`     compressed sprite

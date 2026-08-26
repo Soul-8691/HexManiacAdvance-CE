@@ -19,6 +19,7 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
       Pointer,
       BitArray,
       Splitter,
+      Ascii,
    }
 
    public interface IHasOptions {
@@ -34,6 +35,7 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
       public virtual string SerializeFormat {
          get {
             if (Type == ElementContentType.PCS) return $"{Name}\"\"{Length}";
+            if (Type == ElementContentType.Ascii) return $"{Name}{AsciiRun.SharedFormatString}{Length}";
             if (Type == ElementContentType.Pointer) return $"{Name}<>";
             if (Type == ElementContentType.Integer && Length == 1) return $"{Name}.";
             if (Type == ElementContentType.Integer && Length == 2) return $"{Name}:";
@@ -50,6 +52,10 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
          switch (Type) {
             case ElementContentType.PCS:
                return rawData.TextConverter.Convert(rawData, offset, Length);
+            case ElementContentType.Ascii:
+               var chars = new char[Length];
+               for (int i = 0; i < Length; i++) chars[i] = (char)rawData[offset + i];
+               return "\"" + new string(chars) + "\"";
             case ElementContentType.Integer:
                return ToInteger(rawData, offset, Length).ToString();
             case ElementContentType.Pointer:
@@ -108,6 +114,13 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
                while (bytes.Count < Length) bytes.Add(0);
                data = remainder;
                return token.ChangeData(model, start, bytes);
+            case ElementContentType.Ascii:
+               var text = data;
+               if (text.Length >= 2 && text.StartsWith("\"") && text.EndsWith("\"")) text = text.Substring(1, text.Length - 2);
+               var asciiBytes = new List<byte>();
+               for (int i = 0; i < Length; i++) asciiBytes.Add(i < text.Length ? (byte)text[i] : (byte)0);
+               data = remainder;
+               return token.ChangeData(model, start, asciiBytes);
             case ElementContentType.Integer:
                int intValue;
                if (data.StartsWith("0x")) {

@@ -100,6 +100,10 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
             return new PCS(offsets.SegmentStart, offsets.SegmentOffset, data.TextConverter.Convert(data, offsets.SegmentStart, currentSegment.Length), PCSString.PCS[index]);
          }
 
+         if (currentSegment.Type == ElementContentType.Ascii) {
+            return new Ascii(offsets.SegmentStart, offsets.SegmentOffset, ((char)data[index]).ToString());
+         }
+
          throw new NotImplementedException();
       }
 
@@ -1406,6 +1410,8 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
             if (name == string.Empty && format != ElementContentType.Splitter) throw new ArrayRunParseException($"expected name, but none was found: {segments}");
             if (format == ElementContentType.PCS && segmentLength < 1) throw new ArrayRunParseException($"Cannot have 0-length text: {name}");
             if (format == ElementContentType.PCS && segmentLength > 1000) throw new ArrayRunParseException($"Cannot have text longer than 1k bytes in a table: {name}");
+            if (format == ElementContentType.Ascii && segmentLength < 1) throw new ArrayRunParseException($"Cannot have 0-length text: {name}");
+            if (format == ElementContentType.Ascii && segmentLength > 1000) throw new ArrayRunParseException($"Cannot have text longer than 1k bytes in a table: {name}");
 
             // check to see if a name or length is part of the format
             if (format == ElementContentType.Integer && segments.Length > formatLength && segments[formatLength] != ' ') {
@@ -1508,6 +1514,13 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
             var formatLength = 2;
             while (formatLength < segments.Length && char.IsDigit(segments[formatLength])) formatLength++;
             if (int.TryParse(segments.Slice(2, formatLength - 2), out var segmentLength)) {
+               return (format, formatLength, segmentLength);
+            }
+         } else if (segments.Length >= AsciiRun.SharedFormatString.Length && MemoryExtensions.Equals(segments.Slice(0, AsciiRun.SharedFormatString.Length), AsciiRun.SharedFormatString, StringComparison.Ordinal)) {
+            var format = ElementContentType.Ascii;
+            var formatLength = AsciiRun.SharedFormatString.Length;
+            while (formatLength < segments.Length && char.IsDigit(segments[formatLength])) formatLength++;
+            if (int.TryParse(segments.Slice(AsciiRun.SharedFormatString.Length, formatLength - AsciiRun.SharedFormatString.Length), out var segmentLength)) {
                return (format, formatLength, segmentLength);
             }
          } else if (segments.StartsWith(CalculatedFormatString)) {
