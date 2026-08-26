@@ -68,6 +68,25 @@ namespace HavenSoft.HexManiac.Tests {
          Assert.Equal("5", Execute("table['elements'][2].a").Trim()); // row 2, field a
       }
 
+      // EditorViewModel.this[int] must return object, not ITabContent: pythonnet 3.x wraps a
+      // returned value strictly in its declared interface type, which would hide ViewPort-only
+      // members like Model and this[string] from Python, breaking editor[0]['table'] / editor[0].Model.
+      [Fact]
+      public void EditorIndexer_StringKeyAccess_WorksLikeTableGetter() {
+         ViewPort.Edit("^elements[a: b:]2 1 2 3 4 ");
+
+         var result = Execute("editor[0]['elements'][0].a").Trim();
+
+         Assert.Equal("1", result);
+      }
+
+      [Fact]
+      public void EditorIndexer_ModelProperty_IsAccessible() {
+         var result = Execute("editor[0].Model is not None").Trim();
+
+         Assert.Equal("True", result);
+      }
+
       [Fact]
       public void RunPython_EditsField_UndoRevertsRedoReapplies() {
          ViewPort.Edit("^elements[a:|t|x::|y::|z:: b:]2 (0 4 0) ");

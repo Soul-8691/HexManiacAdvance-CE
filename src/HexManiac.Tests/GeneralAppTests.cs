@@ -43,8 +43,8 @@ namespace HavenSoft.HexManiac.Tests {
 
          editor.SwapTabs(0, 1);
 
-         Assert.Equal("file2", editor[0].Name);
-         Assert.Equal("file1", editor[1].Name);
+         Assert.Equal("file2", ((ITabContent)editor[0]).Name);
+         Assert.Equal("file1", ((ITabContent)editor[1]).Name);
          Assert.Equal(0, editor.SelectedIndex);
       }
 

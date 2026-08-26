@@ -35,7 +35,7 @@ namespace HavenSoft.HexManiac.Tests {
 
          editor.DiffRight.Execute(editor[0]);
 
-         Assert.Equal("Left -> Right", editor[2].Name);
+         Assert.Equal("Left -> Right", ((ITabContent)editor[2]).Name);
       }
 
       [Fact]
@@ -294,7 +294,7 @@ namespace HavenSoft.HexManiac.Tests {
 
       [Fact]
       public void OneTab_AddNewTab_DiffOptionsUpdate() {
-         editor[1].Close.Execute();
+         ((ITabContent)editor[1]).Close.Execute();
          int notifyCount = 0;
          ViewModel0.DiffRight.CanExecuteChanged += (sender, e) => notifyCount += 1;
 

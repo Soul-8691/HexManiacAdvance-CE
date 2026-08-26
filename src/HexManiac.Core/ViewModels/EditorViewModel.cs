@@ -473,7 +473,11 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
 
       public event NotifyCollectionChangedEventHandler CollectionChanged;
 
-      public ITabContent this[int index] => tabs[index];
+      // declared as object, not ITabContent: pythonnet 3.x wraps a returned value strictly in its
+      // declared interface type, which would hide members (like ViewPort.Model / this[string]) that
+      // only exist on the concrete tab type - breaking `editor[0].Model` / `editor[0]['table']` from
+      // Python scripts. Returning object lets pythonnet expose the real runtime type instead.
+      public object this[int index] => tabs[index];
 
       public int Count => tabs.Count;
 
