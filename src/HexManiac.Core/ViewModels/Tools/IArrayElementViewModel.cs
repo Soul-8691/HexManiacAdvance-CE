@@ -199,6 +199,34 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       }
    }
 
+   /// <summary>
+   /// Sidebar text box for an ArrayRunIndexedAsciiSegment: shows the resolved string (baseAnchor + this field's
+   /// relative-offset value), and typing here relocates the string (if needed) and updates the offset - the
+   /// field's own grid cell just shows the raw offset as hex, since the text doesn't fit in its 4 bytes.
+   /// </summary>
+   public class IndexedAsciiFieldStrategy : IFieldArrayElementViewModelStrategy {
+      public static IndexedAsciiFieldStrategy Instance { get; } = new IndexedAsciiFieldStrategy();
+      public ElementContentViewModelType Type => ElementContentViewModelType.TextField;
+
+      private static ArrayRunIndexedAsciiSegment FindSegment(FieldArrayElementViewModel viewModel) {
+         if (viewModel.Model.GetNextRun(viewModel.Start) is not ITableRun table) return null;
+         var offsets = table.ConvertByteOffsetToArrayOffset(viewModel.Start);
+         return table.ElementContent[offsets.SegmentIndex] as ArrayRunIndexedAsciiSegment;
+      }
+
+      public void UpdateModelFromViewModel(FieldArrayElementViewModel viewModel) {
+         var segment = FindSegment(viewModel);
+         if (segment == null) return;
+         segment.WriteText(viewModel.Model, viewModel.ViewPort.CurrentChange, viewModel.Start, viewModel.Content);
+      }
+
+      public string UpdateViewModelFromModel(FieldArrayElementViewModel viewModel) {
+         var segment = FindSegment(viewModel);
+         if (segment == null) return string.Empty;
+         return segment.ToText(viewModel.Model, viewModel.Start).Trim('"');
+      }
+   }
+
    public class NumericFieldStrategy : IFieldArrayElementViewModelStrategy {
       public static NumericFieldStrategy Instance { get; } = new NumericFieldStrategy();
       public ElementContentViewModelType Type => ElementContentViewModelType.NumericField;

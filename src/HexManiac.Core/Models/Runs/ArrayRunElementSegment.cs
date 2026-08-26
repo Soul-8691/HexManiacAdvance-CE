@@ -20,6 +20,9 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
       BitArray,
       Splitter,
       Ascii,
+      // parse-dispatch only: ArrayRunIndexedAsciiSegment reports Type as Integer once constructed,
+      // so this value never appears on a live segment - see ArrayRun.ExtractSingleFormat/ParseSegments.
+      IndexedAscii,
    }
 
    public interface IHasOptions {
@@ -189,6 +192,93 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
          if (Length == 1) return (sbyte)value;
          if (Length == 2) return (short)value;
          return value;
+      }
+   }
+
+   /// <summary>
+   /// A plain 4-byte integer whose value is a relative index (not a real ROM pointer): the text it refers to lives
+   /// at (the address of BaseAnchorName) + (this field's stored value), and runs until Terminator is found (or
+   /// IndexedAsciiRun.MaxLength bytes, if no terminator is found). Format: name`asc`BaseAnchorName!TERMHEX,
+   /// e.g. offset`asc`data.cards.names.text!00
+   /// </summary>
+   public class ArrayRunIndexedAsciiSegment : ArrayRunElementSegment {
+      public string BaseAnchorName { get; }
+      public IReadOnlyList<byte> Terminator { get; }
+
+      public override string SerializeFormat {
+         get {
+            var terminatorHex = Terminator.Select(b => b.ToString("X2")).Aggregate(string.Empty, (a, b) => a + b);
+            return $"{Name}{AsciiRun.SharedFormatString}{BaseAnchorName}!{terminatorHex}";
+         }
+      }
+
+      public ArrayRunIndexedAsciiSegment(string name, string baseAnchorName, IReadOnlyList<byte> terminator) : base(name, ElementContentType.Integer, 4) {
+         BaseAnchorName = baseAnchorName;
+         Terminator = terminator;
+      }
+
+      public override string ToText(IDataModel rawData, int offset, int depth = 0) {
+         var value = ToInteger(rawData, offset, Length);
+         var baseAddress = rawData.GetAddressFromAnchor(new NoDataChangeDeltaModel(), -1, BaseAnchorName);
+         if (baseAddress == Pointer.NULL) return value.ToString();
+         var destination = baseAddress + value;
+         if (destination < 0 || destination >= rawData.Count) return value.ToString();
+
+         var length = AsciiString.ReadLength(rawData, destination, Terminator);
+         var textLength = Math.Max(0, length - Terminator.Count);
+         var chars = new char[textLength];
+         for (int i = 0; i < textLength; i++) chars[i] = (char)rawData[destination + i];
+         return "\"" + new string(chars) + "\"";
+      }
+
+      public override bool Write(IReadOnlyList<ArrayRunElementSegment> parentSegments, IDataModel model, ModelDelta token, int start, ref string data) {
+         if (data.StartsWith("(") && data.EndsWith(")")) data = data.Substring(1, data.Length - 2);
+         var tokens = TableStreamRun.Tokenize(data);
+         var remainder = ", ".Join(tokens.Skip(1));
+         var value = tokens.Count > 0 ? tokens[0] : string.Empty;
+         data = remainder;
+
+         if (value.Length >= 2 && value.StartsWith("\"") && value.EndsWith("\"")) {
+            return WriteText(model, token, start, value.Substring(1, value.Length - 2));
+         }
+
+         int intValue;
+         if (value.StartsWith("0x")) {
+            if (!int.TryParse(value.Substring(2), NumberStyles.HexNumber, CultureInfo.CurrentCulture, out intValue)) intValue = 0;
+         } else {
+            if (!int.TryParse(value, out intValue)) intValue = 0;
+         }
+         return model.WriteMultiByteValue(start, Length, token, intValue);
+      }
+
+      /// <summary>
+      /// Resolves (creating if necessary) the IndexedAsciiRun that this field's current value points at, registering
+      /// `start` as one of its sources so a later relocation (from editing the text) keeps this field's relative
+      /// offset in sync. Returns null if the base anchor or the computed destination isn't valid.
+      /// </summary>
+      public IndexedAsciiRun ResolveRun(IDataModel model, ModelDelta token, int start, out int baseAddress) {
+         baseAddress = model.GetAddressFromAnchor(token, start, BaseAnchorName);
+         if (baseAddress == Pointer.NULL) return null;
+         var value = ToInteger(model, start, Length);
+         var destination = baseAddress + value;
+         if (destination < 0 || destination >= model.Count) return null;
+
+         if (!(model.GetNextRun(destination) is IndexedAsciiRun run) || run.Start != destination) {
+            run = new IndexedAsciiRun(model, destination, Terminator);
+         }
+         run = run.WithSource(start, baseAddress);
+         if (token is not NoDataChangeDeltaModel) model.ObserveRunWritten(token, run);
+         return run;
+      }
+
+      /// <summary>Sets the text at this field's referenced location, relocating (and fixing up every field that
+      /// shares this string) if the new text doesn't fit in the space currently available.</summary>
+      public bool WriteText(IDataModel model, ModelDelta token, int start, string text) {
+         var run = ResolveRun(model, token, start, out var _);
+         if (run == null) return false;
+         var newRun = (IndexedAsciiRun)run.DeserializeRun(text, token, out var changedOffsets, out var _);
+         model.ObserveRunWritten(token, newRun);
+         return changedOffsets.Count > 0;
       }
    }
 

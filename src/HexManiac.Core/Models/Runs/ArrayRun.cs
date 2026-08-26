@@ -69,6 +69,11 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
             } else if (currentSegment is ArrayRunHexSegment) {
                var value = data.ReadMultiByteValue(offsets.SegmentStart, currentSegment.Length);
                return new IntegerHex(offsets.SegmentStart, position, value, currentSegment.Length) { IsUnused = currentSegment.IsUnused() };
+            } else if (currentSegment is ArrayRunIndexedAsciiSegment) {
+               // show the raw relative offset as hex rather than a confusing (often negative-looking) decimal
+               // number - the resolved text itself is shown/edited in the Table Tool sidebar, not inline here.
+               var value = data.ReadMultiByteValue(offsets.SegmentStart, currentSegment.Length);
+               return new IntegerHex(offsets.SegmentStart, position, value, currentSegment.Length);
             } else if (currentSegment is ArrayRunColorSegment) {
                var color = (short)data.ReadMultiByteValue(offsets.SegmentStart, currentSegment.Length);
                return new UncompressedPaletteColor(offsets.SegmentStart, position, color);
@@ -1494,6 +1499,12 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
             } else if (format == ElementContentType.Splitter) {
                segments = segments.Slice(formatLength).Trim();
                list.Add(new ArrayRunSplitterSegment());
+            } else if (format == ElementContentType.IndexedAscii) {
+               if (!TryParseIndexedAsciiFormat(segments, out var _, out var anchorName, out var terminator)) {
+                  throw new ArrayRunParseException($"indexed-ascii format was not understood: {segments}");
+               }
+               segments = segments.Slice(formatLength).Trim();
+               list.Add(new ArrayRunIndexedAsciiSegment(name, anchorName, terminator));
             } else {
                segments = segments.Slice(formatLength).Trim();
                if (format == ElementContentType.Unknown) {
@@ -1517,11 +1528,14 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
                return (format, formatLength, segmentLength);
             }
          } else if (segments.Length >= AsciiRun.SharedFormatString.Length && MemoryExtensions.Equals(segments.Slice(0, AsciiRun.SharedFormatString.Length), AsciiRun.SharedFormatString, StringComparison.Ordinal)) {
-            var format = ElementContentType.Ascii;
             var formatLength = AsciiRun.SharedFormatString.Length;
-            while (formatLength < segments.Length && char.IsDigit(segments[formatLength])) formatLength++;
-            if (int.TryParse(segments.Slice(AsciiRun.SharedFormatString.Length, formatLength - AsciiRun.SharedFormatString.Length), out var segmentLength)) {
-               return (format, formatLength, segmentLength);
+            var digitLength = formatLength;
+            while (digitLength < segments.Length && char.IsDigit(segments[digitLength])) digitLength++;
+            if (digitLength > formatLength && int.TryParse(segments.Slice(formatLength, digitLength - formatLength), out var segmentLength)) {
+               return (ElementContentType.Ascii, digitLength, segmentLength);
+            }
+            if (TryParseIndexedAsciiFormat(segments, out var indexedFormatLength, out var _, out var _)) {
+               return (ElementContentType.IndexedAscii, indexedFormatLength, 4);
             }
          } else if (segments.StartsWith(CalculatedFormatString)) {
             return (ElementContentType.Integer, 0, 0);
@@ -1562,6 +1576,36 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
          }
 
          return (ElementContentType.Unknown, 0, 0);
+      }
+
+      /// <summary>
+      /// Parses the AnchorName!TERMHEX tail of an indexed-ascii format, e.g. `asc`data.cards.names.text!00.
+      /// `segments` is the full span, including the leading `asc` (AsciiRun.SharedFormatString) prefix.
+      /// </summary>
+      private static bool TryParseIndexedAsciiFormat(ReadOnlySpan<char> segments, out int formatLength, out string anchorName, out byte[] terminator) {
+         formatLength = 0;
+         anchorName = null;
+         terminator = null;
+
+         var nameStart = AsciiRun.SharedFormatString.Length;
+         var nameEnd = nameStart;
+         while (nameEnd < segments.Length && IsValidTableNameCharacter(segments[nameEnd])) nameEnd++;
+         if (nameEnd == nameStart) return false;
+         if (nameEnd >= segments.Length || segments[nameEnd] != '!') return false;
+
+         var hexStart = nameEnd + 1;
+         var hexEnd = hexStart;
+         while (hexEnd < segments.Length && ViewPort.AllHexCharacters.Contains(segments[hexEnd])) hexEnd++;
+         var hexLength = hexEnd - hexStart;
+         if (hexLength == 0 || hexLength % 2 != 0) return false;
+
+         anchorName = segments.Slice(nameStart, nameEnd - nameStart).ToString();
+         var hex = segments.Slice(hexStart, hexLength).ToString();
+         terminator = new byte[hexLength / 2];
+         for (int i = 0; i < terminator.Length; i++) terminator[i] = byte.Parse(hex.Substring(i * 2, 2), NumberStyles.HexNumber, CultureInfo.CurrentCulture);
+
+         formatLength = hexEnd;
+         return true;
       }
 
       private (string lengthFromAnchor, ParentOffset parentOffset, int elementCount) ParseLengthFromAnchor(ReadOnlySpan<char> length) {

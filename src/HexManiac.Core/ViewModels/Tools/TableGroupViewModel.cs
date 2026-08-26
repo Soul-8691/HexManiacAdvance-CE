@@ -121,6 +121,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
                   viewModel = new OffsetRenderViewModel(viewPort, renderSeg, itemAddress);
                } else if (item is ArrayRunSignedSegment signedSegment) {
                   viewModel = new FieldArrayElementViewModel(viewPort, item.Name, itemAddress, item.Length, SignedFieldStrategy.Instance);
+               } else if (item is ArrayRunIndexedAsciiSegment) {
+                  viewModel = new FieldArrayElementViewModel(viewPort, item.Name, itemAddress, item.Length, IndexedAsciiFieldStrategy.Instance);
                } else {
                   viewModel = new FieldArrayElementViewModel(viewPort, item.Name, itemAddress, item.Length, new NumericFieldStrategy());
                }

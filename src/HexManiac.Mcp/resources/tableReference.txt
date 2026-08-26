@@ -16,6 +16,9 @@
 // |b[]       bit-array (1-bit per value, labeled after an enum or list)
 // <>         pointer
 // `asc`10    10 ascii characters, fixed length (usable inline like ""10, or as a pointer destination like <`asc`10>)
+// `asc`anchor!00   a plain 4-byte integer field whose value is a relative offset from `anchor`'s address to a
+//                  0x00-terminated (or !TERMHEX-terminated) ascii string elsewhere - not a real pointer. The text is
+//                  resolved/edited as (address of anchor) + (this field's value), capped at 1024 bytes if unterminated.
 // `ucp`      uncompressed palette
 // `lzp4`     compressed palette
 // `lzs4`     compressed sprite
