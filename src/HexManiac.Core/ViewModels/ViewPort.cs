@@ -50,6 +50,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
 
       private readonly object threadlock = new();
       private readonly IFileSystem fs;
+      public IFileSystem FileSystem => fs;
 
       private MapEditorViewModel mapper;
       public bool HasValidMapper => mapper?.IsValidState ?? false;
@@ -723,6 +724,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       #region Progress
 
       private readonly IWorkDispatcher dispatcher;
+      public IWorkDispatcher Dispatcher => dispatcher;
 
       private double progress;
       public double Progress { get => progress; set => Set(ref progress, value); }

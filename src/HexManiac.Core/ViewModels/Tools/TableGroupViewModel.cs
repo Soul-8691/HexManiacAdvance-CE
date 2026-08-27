@@ -1,4 +1,5 @@
 ﻿using HavenSoft.HexManiac.Core.Models;
+using HavenSoft.HexManiac.Core.Models.Code;
 using HavenSoft.HexManiac.Core.Models.Map;
 using HavenSoft.HexManiac.Core.Models.Runs;
 using HavenSoft.HexManiac.Core.Models.Runs.Sprites;
@@ -135,10 +136,12 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
             }
             itemAddress += item.Length;
          }
-         AddAdhocSpecialElementsToGroup(viewPort, table);
+         AddAdhocSpecialElementsToGroup(viewPort, table, index);
       }
 
-      private void AddAdhocSpecialElementsToGroup(IViewPort viewPort, ITableRun table) {
+      private void AddAdhocSpecialElementsToGroup(IViewPort viewPort, ITableRun table, int index) {
+         AddCardImportButtonToGroup(viewPort, table, index);
+
          if (!viewPort.Model.IsEmerald() && table.ElementContent.Count == 14 && table.ElementCount == 1 && table.ElementContent.Select(seg => seg.Type).ToArray().SequenceEqual(new[] {
             ElementContentType.Pointer, ElementContentType.Pointer, ElementContentType.Pointer, ElementContentType.Pointer,
             ElementContentType.Integer, ElementContentType.Integer, ElementContentType.Integer, ElementContentType.Integer,
@@ -156,6 +159,49 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
          })) {
             AddAdhocMapElementsToGroup(viewPort, table);
          }
+      }
+
+      private void AddCardImportButtonToGroup(IViewPort viewPort, ITableRun table, int index) {
+         if (!(viewPort is ViewPort vp) || vp.FileSystem == null) return;
+         var anchor = vp.Model.GetAnchorFromAddress(-1, table.Start);
+         if (anchor != CardImport.StatsInternalName && anchor != CardImport.StatsKonamiName) return;
+         if (!CardImport.CanImport(vp.Model)) return;
+         Add(new ButtonArrayElementViewModel("Import from YGOProDeck", () => RunCardImport(vp, table, index)));
+      }
+
+      private static void RunCardImport(ViewPort viewPort, ITableRun table, int index) {
+         var fs = viewPort.FileSystem;
+         var query = fs.RequestText("Import from YGOProDeck", "Enter a card name or password:");
+         if (string.IsNullOrWhiteSpace(query)) return;
+         viewPort.Dispatcher.RunBackgroundWork(() => {
+            var results = YgoProDeckClient.Search(query);
+            viewPort.Dispatcher.BlockOnUIWork(() => ApplyCardImportResult(viewPort, fs, table, index, results));
+         });
+      }
+
+      private static void ApplyCardImportResult(ViewPort viewPort, IFileSystem fs, ITableRun table, int index, IReadOnlyList<YgoProDeckCard> results) {
+         if (results.Count == 0) {
+            fs.ShowCustomMessageBox("No matching card found on YGOProDeck.", showYesNoCancel: false);
+            return;
+         }
+
+         var card = results[0];
+         if (results.Count > 1) {
+            var options = results.Select((c, i) => new VisualOption { Index = i, Option = c.Name, ShortDescription = c.Type }).ToArray();
+            var choice = fs.ShowOptions("Import from YGOProDeck", "Multiple cards matched. Choose one:", null, options);
+            if (choice < 0 || choice >= results.Count) return;
+            card = results[choice];
+         }
+
+         var internalIndex = CardImport.ResolveInternalIndex(viewPort.Model, table, index);
+         if (internalIndex < 0) {
+            fs.ShowCustomMessageBox("Could not find a matching row in data.cards.stats.internal for this card.", showYesNoCancel: false);
+            return;
+         }
+
+         var result = CardImport.Import(viewPort.Model, viewPort.CurrentChange, internalIndex, card);
+         if (!result.Success) fs.ShowCustomMessageBox(result.Message, showYesNoCancel: false);
+         viewPort.Tools.TableTool.DataForCurrentRunChanged();
       }
 
       private void AddAdhocMapElementsToGroup(IViewPort viewPort, ITableRun table) {
