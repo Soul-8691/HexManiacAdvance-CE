@@ -74,6 +74,41 @@ namespace HavenSoft.HexManiac.Tests {
          Assert.Empty(targets);
       }
 
+      [Fact]
+      public void ThumbParser_ShowCardNamesOn_ReplacesMatchingWordLiteral() {
+         Parser.CardSymbols = new CardSymbols(new[] { "#define KONAMI_THE_AGENT_OF_JUDGMENT_SATURN 5951" });
+         Parser.ShowCardNames = true;
+         Parser.Compile(Token, Model, 0, "ldr r0, [pc, <004>]", "bx r0", "004: .word 173F"); // 0x173F == 5951 decimal
+
+         var text = Parser.Parse(Model, 0, 4);
+
+         Assert.Contains("@ = KONAMI_THE_AGENT_OF_JUDGMENT_SATURN", text);
+      }
+
+      [Fact]
+      public void ThumbParser_ShowCardNamesOff_ShowsRawNumber() {
+         Parser.CardSymbols = new CardSymbols(new[] { "#define KONAMI_THE_AGENT_OF_JUDGMENT_SATURN 5951" });
+         Parser.ShowCardNames = false;
+         Parser.Compile(Token, Model, 0, "ldr r0, [pc, <004>]", "bx r0", "004: .word 173F");
+
+         var text = Parser.Parse(Model, 0, 4);
+
+         Assert.Contains("@ = 5951", text);
+         Assert.DoesNotContain("KONAMI", text);
+      }
+
+      [Fact]
+      public void ThumbParser_ShowCardNamesOn_NoMatch_ShowsRawNumber() {
+         Parser.CardSymbols = new CardSymbols(new[] { "#define KONAMI_THE_AGENT_OF_JUDGMENT_SATURN 5951" });
+         Parser.ShowCardNames = true;
+         Parser.Compile(Token, Model, 0, "ldr r0, [pc, <004>]", "bx r0", "004: .word 1740"); // 0x1740 == 5952, unmatched
+
+         var text = Parser.Parse(Model, 0, 4);
+
+         Assert.Contains("@ = 5952", text);
+         Assert.DoesNotContain("KONAMI", text);
+      }
+
       private void SelectRange(int start, int length) {
          ViewPort.SelectionStart = ViewPort.ConvertAddressToViewPoint(start);
          ViewPort.SelectionEnd = ViewPort.ConvertAddressToViewPoint(start + length - 1);

@@ -46,6 +46,7 @@ namespace HavenSoft.HexManiac.Core.Models {
       public string PythonUtility { get; }
       public PokefireredSymbols PokefireredSymbols { get; }
       public ProjectLabels ProjectLabels { get; }
+      public CardSymbols CardSymbols { get; }
       public int CopyLimit { get; }
 
       public Singletons(IWorkDispatcher dispatcher = null, int copyLimit = 40000) {
@@ -63,12 +64,18 @@ namespace HavenSoft.HexManiac.Core.Models {
          var pokefireredText = File.Exists(PokefireredSymbolsFileName) ? File.ReadAllText(PokefireredSymbolsFileName) : string.Empty;
          PokefireredSymbols = new PokefireredSymbols(WorkDispatcher, pokefireredText);
          ProjectLabels = new ProjectLabels(LoadProjectLabelFiles());
+         CardSymbols = new CardSymbols(LoadCardSymbolFiles());
          CopyLimit = copyLimit;
       }
 
       private static IEnumerable<string> LoadProjectLabelFiles() {
          if (!Directory.Exists(ProjectLabelsDirectory)) return Enumerable.Empty<string>();
          return Directory.GetFiles(ProjectLabelsDirectory, "*.ini").Select(File.ReadAllText).ToArray();
+      }
+
+      private static IEnumerable<string> LoadCardSymbolFiles() {
+         if (!Directory.Exists(ProjectLabelsDirectory)) return Enumerable.Empty<string>();
+         return Directory.GetFiles(ProjectLabelsDirectory, "*.h").Select(File.ReadAllText).ToArray();
       }
 
       public Singletons(IMetadataInfo metadataInfo, IReadOnlyDictionary<string, GameReferenceTables> gameReferenceTables, int copyLimit = 40000) : this(metadataInfo, gameReferenceTables, null, copyLimit) { }
@@ -89,6 +96,7 @@ namespace HavenSoft.HexManiac.Core.Models {
          PythonUtility = string.Empty;
          PokefireredSymbols = new PokefireredSymbols(WorkDispatcher, string.Empty);
          ProjectLabels = new ProjectLabels();
+         CardSymbols = new CardSymbols();
       }
 
       private IReadOnlyList<IScriptLine> LoadScriptReference<TLine>(string file) where TLine : ScriptLine {

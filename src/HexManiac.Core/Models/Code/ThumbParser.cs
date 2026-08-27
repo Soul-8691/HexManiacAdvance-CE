@@ -15,11 +15,21 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       private readonly PokefireredSymbols pokefireredSymbols;
       private readonly ProjectLabels projectLabels;
       private Instruction blTemplate;
+
+      /// <summary>When true, a .word/ldr literal that matches a known card-ID symbol (see
+      /// CardSymbols) is shown as that symbol's name instead of the raw number.</summary>
+      public bool ShowCardNames { get; set; }
+
+      /// <summary>Mutable (not just constructor-supplied) so tests can swap in a custom lookup
+      /// without needing a full Singletons/resources-on-disk setup.</summary>
+      public CardSymbols CardSymbols { get; set; }
+
       public ThumbParser(Singletons singletons) {
          conditionalCodes.AddRange(singletons.ThumbConditionalCodes);
          instructionTemplates.AddRange(singletons.ThumbInstructionTemplates);
          pokefireredSymbols = singletons.PokefireredSymbols;
          projectLabels = singletons.ProjectLabels;
+         CardSymbols = singletons.CardSymbols;
          instructionTemplates.AddRange(new IInstruction[] {
             new ByteInstruction(),
             new HalfWordInstruction(),
@@ -106,7 +116,13 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                         } else if (value < -10000) {
                            valueText = $"0x{(uint)value:X8}";
                         }
-                        if (string.IsNullOrEmpty(anchor)) {
+                        var cardSymbol = ShowCardNames && string.IsNullOrEmpty(anchor) ? CardSymbols.TryGetSymbol(value) : null;
+                        if (!string.IsNullOrEmpty(cardSymbol)) {
+                           // unlike the pokefirered/project symbol lookups below (which annotate the
+                           // number, since it's usually a real address), a card-ID literal isn't
+                           // meaningful as a number to the reader - replace it outright.
+                           valueText = cardSymbol;
+                        } else if (string.IsNullOrEmpty(anchor)) {
                            // a .word/ldr literal is frequently a raw pointer (often a RAM address
                            // like 0x02xxxxxx EWRAM), so look it up as-is rather than as a file offset.
                            // It may also be a Thumb function pointer (used for an indirect call),

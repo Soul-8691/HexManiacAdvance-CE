@@ -56,6 +56,16 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       private int fontSize = 12;
       public int FontSize { get => fontSize; set => TryUpdate(ref fontSize, value); }
 
+      public bool ShowCardNames {
+         get => thumb.ShowCardNames;
+         set {
+            if (thumb.ShowCardNames == value) return;
+            thumb.ShowCardNames = value;
+            NotifyPropertyChanged();
+            if (mode == CodeMode.Thumb) UpdateContent();
+         }
+      }
+
       public CodeMode Mode {
          get => mode;
          set {
