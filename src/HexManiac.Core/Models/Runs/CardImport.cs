@@ -65,41 +65,30 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
          }
 
          UpdateNameLists(model, token, internalTable, internalIndex, konamiId, card.Name);
-         model.TryGetList("cardnames", out var dbg1);
-         if (dbg1 != null && dbg1[konamiId] != card.Name) throw new InvalidOperationException($"DEBUG A: cardnames[{konamiId}]='{dbg1[konamiId]}'");
 
          if (!string.IsNullOrEmpty(card.Name)) ImportText(model, token, NamesPointerName, textPoolAddress, internalIndex, card.Name);
-         model.TryGetList("cardnames", out var dbg2);
-         if (dbg2 != null && dbg2[konamiId] != card.Name) throw new InvalidOperationException($"DEBUG B: cardnames[{konamiId}]='{dbg2[konamiId]}'");
-
          if (!string.IsNullOrEmpty(card.Desc)) ImportText(model, token, DescriptionsPointerName, textPoolAddress, internalIndex, card.Desc);
-         model.TryGetList("cardnames", out var dbg3);
-         if (dbg3 != null && dbg3[konamiId] != card.Name) throw new InvalidOperationException($"DEBUG C: cardnames[{konamiId}]='{dbg3[konamiId]}'");
 
          var passwordLength = passwordsTable.ElementContent[0].Length;
          if (internalIndex < passwordsTable.ElementCount) {
             model.WriteMultiByteValue(passwordsTable.Start + internalIndex * passwordsTable.ElementLength, passwordLength, token, card.Id);
          }
-         model.TryGetList("cardnames", out var dbg4);
-         if (dbg4 != null && dbg4[konamiId] != card.Name) throw new InvalidOperationException($"DEBUG D: cardnames[{konamiId}]='{dbg4[konamiId]}'");
 
          Realphabetize(model, token);
-         model.TryGetList("cardnames", out var dbg5);
-         if (dbg5 != null && dbg5[konamiId] != card.Name) throw new InvalidOperationException($"DEBUG E: cardnames[{konamiId}]='{dbg5[konamiId]}'");
 
          return new Result(true, $"Imported '{card.Name}'.");
       }
 
       private static void WriteStats(ITableRun table, IDataModel model, ModelDelta token, int row, YgoProDeckCard card) {
+         var normalizedType = NormalizeType(card.Type);
          if (card.IsSpellOrTrap) {
             // race/attribute/type all show the card's overall kind (Spell/Trap); the actual
             // subtype (Normal/Continuous/Quick-Play/Counter/etc, the API's own "race") goes in
             // spelltraprace - matches how this ROM's races/attributes/types lists represent
             // non-monster cards.
-            var kind = NormalizeSpellTrapKind(card.Type);
-            TryWriteEnum(table, model, token, row, "race", kind);
-            TryWriteEnum(table, model, token, row, "attribute", kind);
-            TryWriteEnum(table, model, token, row, "type", kind);
+            TryWriteEnum(table, model, token, row, "race", normalizedType);
+            TryWriteEnum(table, model, token, row, "attribute", normalizedType);
+            TryWriteEnum(table, model, token, row, "type", normalizedType);
             TryWriteEnum(table, model, token, row, "spelltraprace", card.Race);
             table.WriteValue(0, model, token, row, "attack");
             table.WriteValue(0, model, token, row, "defense");
@@ -107,7 +96,7 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
          } else {
             TryWriteEnum(table, model, token, row, "race", card.Race);
             TryWriteEnum(table, model, token, row, "attribute", card.Attribute);
-            TryWriteEnum(table, model, token, row, "type", card.Type);
+            TryWriteEnum(table, model, token, row, "type", normalizedType);
             TryWriteEnum(table, model, token, row, "spelltraprace", "None");
             table.WriteValue(card.Atk ?? 0, model, token, row, "attack");
             table.WriteValue(card.Def ?? 0, model, token, row, "defense");
@@ -115,12 +104,14 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
          }
       }
 
-      // "Spell Card"/"Trap Card" -> "Spell"/"Trap", matching how this ROM's enum lists spell/trap
-      // cards (no " Card" suffix) rather than the API's own wording.
-      private static string NormalizeSpellTrapKind(string apiType) {
+      // "Spell Card"/"Trap Card" -> "Spell"/"Trap", "Effect Monster"/"Normal Monster" -> "Effect"/
+      // "Normal", etc. This ROM's races/attributes/types enum lists use the API's wording with
+      // its trailing " Card" (spell/trap) or " Monster" (monster) suffix stripped.
+      private static string NormalizeType(string apiType) {
          if (apiType == null) return null;
-         if (apiType.Contains("Spell")) return "Spell";
-         if (apiType.Contains("Trap")) return "Trap";
+         const string cardSuffix = " Card", monsterSuffix = " Monster";
+         if (apiType.EndsWith(cardSuffix)) return apiType.Substring(0, apiType.Length - cardSuffix.Length);
+         if (apiType.EndsWith(monsterSuffix)) return apiType.Substring(0, apiType.Length - monsterSuffix.Length);
          return apiType;
       }
 

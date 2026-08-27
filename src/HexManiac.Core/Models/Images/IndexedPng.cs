@@ -10,7 +10,7 @@ using System.Text;
 // based on https://github.com/EliotJones/BigGustave/tree/master/src/BigGustave
 // massive thanks!
 
-namespace HexManiac.WPF.Resources {
+namespace HavenSoft.HexManiac.Core.Models.Images {
    public class IndexedPng {
       public static void Save(string filename, int[,] pixels, IReadOnlyList<short> palette)
          => IndexedPngWriter.Save(filename, pixels, palette);

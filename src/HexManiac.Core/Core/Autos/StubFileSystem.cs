@@ -230,6 +230,15 @@ namespace HavenSoft.HexManiac.Core.Models
          return TryLoadIndexImage(ref fileName, out image, out palette);
       }
 
+      public delegate bool TryDecodeImageDelegate(byte[] data, out short[] image, out int width, out int height);
+      public TryDecodeImageDelegate TryDecodeImageStub;
+
+      bool IFileSystem.TryDecodeImage(byte[] data, out short[] image, out int width, out int height) {
+         (image, width, height) = (default, default, default);
+         if (TryDecodeImageStub == null) return default;
+         return TryDecodeImageStub(data, out image, out width, out height);
+      }
+
         public PropertyImplementation<string> CopyText = new PropertyImplementation<string>();
         
         string IFileSystem.CopyText

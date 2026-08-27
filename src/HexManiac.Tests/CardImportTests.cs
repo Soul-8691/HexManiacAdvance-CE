@@ -16,7 +16,9 @@ namespace HavenSoft.HexManiac.Tests {
          Model.SetList(Token, "cardnamesfrom0", "CardA", "CardB"); // konami-row-keyed (matches UME.toml's data.cards.stats.konami length anchor)
          Model.SetList(Token, "races", "None", "Dragon", "Spellcaster", "Spell", "Trap");
          Model.SetList(Token, "attributes", "None", "LIGHT", "DARK", "Spell", "Trap");
-         Model.SetList(Token, "types", "None", "Normal Monster", "Effect Monster", "Spell", "Trap");
+         // short-form labels, matching UME.toml's real "types" list (the API's own wording -
+         // "Effect Monster", "Spell Card" - has to be stripped down to match these).
+         Model.SetList(Token, "types", "None", "Effect", "Spell", "Trap");
          Model.SetList(Token, "spelltrapraces", "None", "Normal", "Continuous", "Quick-Play", "Counter");
 
          ViewPort.Edit($"@000 ^data.cards.stats.internal[{Fields}]cardstatsnames ");
@@ -79,7 +81,7 @@ namespace HavenSoft.HexManiac.Tests {
          Assert.Equal(7, internalTable.ReadValue(Model, 0, "level"));
          Assert.Equal(1, internalTable.ReadValue(Model, 0, "race")); // "Dragon" is index 1 in races
          Assert.Equal(1, internalTable.ReadValue(Model, 0, "attribute")); // "LIGHT" is index 1 in attributes
-         Assert.Equal(2, internalTable.ReadValue(Model, 0, "type")); // "Effect Monster" is index 2 in types
+         Assert.Equal(1, internalTable.ReadValue(Model, 0, "type")); // "Effect Monster" -> "Effect", index 1 in types
          Assert.Equal(0, internalTable.ReadValue(Model, 0, "spelltraprace")); // "None"
 
          // konami table's matching row (card id 2, found at its own row 0) gets the same stats
@@ -96,9 +98,9 @@ namespace HavenSoft.HexManiac.Tests {
 
          Assert.True(result.Success);
          var internalTable = Model.GetTable("data.cards.stats.internal");
-         Assert.Equal(3, internalTable.ReadValue(Model, 0, "race")); // "Spell"
-         Assert.Equal(3, internalTable.ReadValue(Model, 0, "attribute")); // "Spell"
-         Assert.Equal(3, internalTable.ReadValue(Model, 0, "type")); // "Spell"
+         Assert.Equal(3, internalTable.ReadValue(Model, 0, "race")); // "Spell" is index 3 in races
+         Assert.Equal(3, internalTable.ReadValue(Model, 0, "attribute")); // "Spell" is index 3 in attributes
+         Assert.Equal(2, internalTable.ReadValue(Model, 0, "type")); // "Spell Card" -> "Spell", index 2 in types
          Assert.Equal(3, internalTable.ReadValue(Model, 0, "spelltraprace")); // "Quick-Play"
          Assert.Equal(0, internalTable.ReadValue(Model, 0, "attack"));
          Assert.Equal(0, internalTable.ReadValue(Model, 0, "defense"));

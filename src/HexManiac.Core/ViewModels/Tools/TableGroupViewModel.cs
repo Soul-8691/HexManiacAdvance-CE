@@ -173,9 +173,25 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
          var fs = viewPort.FileSystem;
          var query = fs.RequestText("Import from YGOProDeck", "Enter a card name or password:");
          if (string.IsNullOrWhiteSpace(query)) return;
-         viewPort.Dispatcher.RunBackgroundWork(() => {
+         RunOnBackgroundReportingErrors(viewPort, fs, () => {
             var results = YgoProDeckClient.Search(query);
             viewPort.Dispatcher.BlockOnUIWork(() => ApplyCardImportResult(viewPort, fs, table, index, results));
+         });
+      }
+
+      /// <summary>
+      /// IWorkDispatcher.RunBackgroundWork's Task is never awaited by callers here, so any
+      /// exception thrown inside would otherwise vanish silently (an unobserved faulted Task) -
+      /// the button would look like it did nothing, with no error shown. Route background work
+      /// through this so a failure is always reported instead of disappearing.
+      /// </summary>
+      private static void RunOnBackgroundReportingErrors(ViewPort viewPort, IFileSystem fs, Action work) {
+         viewPort.Dispatcher.RunBackgroundWork(() => {
+            try {
+               work();
+            } catch (Exception ex) {
+               viewPort.Dispatcher.BlockOnUIWork(() => fs.ShowCustomMessageBox($"Import from YGOProDeck failed: {ex.Message}", showYesNoCancel: false));
+            }
          });
       }
 
@@ -201,6 +217,21 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
 
          var result = CardImport.Import(viewPort.Model, viewPort.CurrentChange, internalIndex, card);
          if (!result.Success) fs.ShowCustomMessageBox(result.Message, showYesNoCancel: false);
+         viewPort.Tools.TableTool.DataForCurrentRunChanged();
+
+         if (!string.IsNullOrEmpty(card.ImageUrlCropped) && CardGraphicsImport.CanImport(viewPort.Model)) {
+            RunOnBackgroundReportingErrors(viewPort, fs, () => {
+               var imageBytes = YgoProDeckClient.DownloadImageBytes(card.ImageUrlCropped);
+               viewPort.Dispatcher.BlockOnUIWork(() => ApplyCardGraphicsResult(viewPort, fs, internalIndex, imageBytes));
+            });
+         }
+      }
+
+      private static void ApplyCardGraphicsResult(ViewPort viewPort, IFileSystem fs, int internalIndex, byte[] imageBytes) {
+         var graphicsResult = imageBytes == null
+            ? new CardImport.Result(false, "Could not download this card's art.")
+            : CardGraphicsImport.Import(viewPort.Model, viewPort.CurrentChange, fs, internalIndex, imageBytes);
+         if (!graphicsResult.Success) fs.ShowCustomMessageBox(graphicsResult.Message, showYesNoCancel: false);
          viewPort.Tools.TableTool.DataForCurrentRunChanged();
       }
 

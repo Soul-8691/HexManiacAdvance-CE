@@ -23,6 +23,18 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
          return Fetch($"{BaseUrl}?{query}");
       }
 
+      /// <returns>The raw image bytes, or null if the download failed.</returns>
+      public static byte[] DownloadImageBytes(string url) {
+         if (string.IsNullOrWhiteSpace(url)) return null;
+         try {
+            var response = Http.GetAsync(url).GetAwaiter().GetResult();
+            if (!response.IsSuccessStatusCode) return null;
+            return response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+         } catch {
+            return null;
+         }
+      }
+
       private static IReadOnlyList<YgoProDeckCard> Fetch(string url) {
          try {
             var response = Http.GetAsync(url).GetAwaiter().GetResult();

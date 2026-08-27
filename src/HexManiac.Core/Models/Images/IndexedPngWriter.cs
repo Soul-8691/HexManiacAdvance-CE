@@ -6,7 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 
-namespace HexManiac.WPF.Resources {
+namespace HavenSoft.HexManiac.Core.Models.Images {
    public class IndexedPngWriter : Stream {
       public static void Save(string filename, int[,] pixels, IReadOnlyList<short> palette) {
          if (palette.Count > 256) {

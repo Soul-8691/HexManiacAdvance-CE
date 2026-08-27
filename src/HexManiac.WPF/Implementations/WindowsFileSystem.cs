@@ -3,7 +3,7 @@ using HavenSoft.HexManiac.Core.Models;
 using HavenSoft.HexManiac.Core.ViewModels;
 using HavenSoft.HexManiac.WPF.Controls;
 using HavenSoft.HexManiac.WPF.Windows;
-using HexManiac.WPF.Resources;
+using HavenSoft.HexManiac.Core.Models.Images;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
@@ -459,6 +459,23 @@ namespace HavenSoft.HexManiac.WPF.Implementations {
          } catch (IOException io) {
             ShowCustomMessageBox($"Error: {io.Message}.", false);
             return default;
+         }
+      }
+
+      public bool TryDecodeImage(byte[] data, out short[] image, out int width, out int height) {
+         (image, width, height) = (null, 0, 0);
+         try {
+            using (var stream = new MemoryStream(data)) {
+               var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+               var frame = decoder.Frames[0];
+               var converted = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+               var (pixels, decodedWidth) = DecodeImage(converted);
+               if (pixels == null) return false;
+               (image, width, height) = (pixels, decodedWidth, converted.PixelHeight);
+               return true;
+            }
+         } catch (Exception ex) when (ex is FileFormatException || ex is NotSupportedException || ex is IOException) {
+            return false;
          }
       }
 

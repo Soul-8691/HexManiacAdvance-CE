@@ -103,6 +103,13 @@ namespace HavenSoft.HexManiac.Core.Models {
       (short[] image, int width) LoadImage(string fileName = null);
 
       /// <summary>
+      /// Decodes an in-memory image (PNG/JPEG/etc, format auto-detected) into a 16bit (5r5g5b)
+      /// array, without any file/dialog involved - for images that arrived over the network
+      /// (e.g. the "Import from YGOProDeck" card art) rather than from a user-picked file.
+      /// </summary>
+      bool TryDecodeImage(byte[] data, out short[] image, out int width, out int height);
+
+      /// <summary>
       /// Tries to load an indexed image.
       /// If the image isn't indexed or the file doesn't exist, returns false.
       /// </summary>

@@ -5,7 +5,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 
-namespace HexManiac.WPF.Resources {
+namespace HavenSoft.HexManiac.Core.Models.Images {
    public class IndexedPngReader : Stream {
       public static (int[,] pixels, IReadOnlyList<short> palette) Load(string fileName) {
          using (var inputStream = File.Open(fileName, FileMode.Open, FileAccess.Read)) {
