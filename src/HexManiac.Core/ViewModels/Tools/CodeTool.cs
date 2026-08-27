@@ -224,7 +224,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
             if (existingRun.Start <= target && !(existingRun is NoInfoRun)) continue; // don't clobber a real, differently-formatted run
 
             var gbaAddress = target + BaseModel.PointerOffset;
-            var symbol = singletons.PokefireredSymbols.TryGetSymbol(gbaAddress) ?? singletons.ProjectLabels.TryGetSymbol(gbaAddress);
+            // pokefirered/HUBOL symbols are FireRed-specific - a numeric match in an unrelated ROM
+            // is meaningless coincidence, so only prefer them over the generic "code.XXXXXX" name
+            // when the loaded ROM actually is BPRE0.
+            var symbol = model.GetGameCode() == "BPRE0" ? singletons.PokefireredSymbols.TryGetSymbol(gbaAddress) ?? singletons.ProjectLabels.TryGetSymbol(gbaAddress) : null;
             var nameTaken = !string.IsNullOrEmpty(symbol) && model.GetAddressFromAnchor(history.CurrentChange, -1, symbol) != Pointer.NULL;
             var name = !string.IsNullOrEmpty(symbol) && !nameTaken ? symbol : $"code.{target:X6}";
 

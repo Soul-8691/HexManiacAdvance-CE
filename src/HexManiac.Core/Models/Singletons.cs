@@ -70,7 +70,9 @@ namespace HavenSoft.HexManiac.Core.Models {
 
       private static IEnumerable<string> LoadProjectLabelFiles() {
          if (!Directory.Exists(ProjectLabelsDirectory)) return Enumerable.Empty<string>();
-         return Directory.GetFiles(ProjectLabelsDirectory, "*.ini").Select(File.ReadAllText).ToArray();
+         // only HUBOL_*.ini (the bundled HUBOL_CFRU.ini/HUBOL_DPE.ini symbol dumps) - not every
+         // *.ini someone might drop in resources/ for an unrelated project.
+         return Directory.GetFiles(ProjectLabelsDirectory, "HUBOL*.ini").Select(File.ReadAllText).ToArray();
       }
 
       private static IEnumerable<string> LoadCardSymbolFiles() {

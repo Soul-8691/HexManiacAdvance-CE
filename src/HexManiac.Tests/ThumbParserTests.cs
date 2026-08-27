@@ -109,6 +109,50 @@ namespace HavenSoft.HexManiac.Tests {
          Assert.DoesNotContain("KONAMI", text);
       }
 
+      [Fact]
+      public void ThumbParser_PokefireredSymbolsParse_ParsesSymFormat() {
+         // PokefireredSymbols.EnsureLoaded() prefers a real %AppData%/HexManiacAdvance/pokefirered.sym
+         // cache over the constructor's fallback content when one exists on disk (from actual HMA
+         // usage), so a full instance isn't reliably testable here - just confirm the parser itself
+         // reads the "AAAAAAAA g SSSSSSSS name" format the BPRE0 gate depends on downstream.
+         var (symbols, _) = PokefireredSymbols.Parse("02020630 g 00000004 gPlayerParty");
+
+         Assert.Equal("gPlayerParty", symbols[0x02020630]);
+      }
+
+      [Fact]
+      public void ThumbParser_PokefireredSymbols_NotBPRE0_HidesSymbol() {
+         // default game code (from SetFullModel(0xFF) in the constructor) is not BPRE0 - whatever
+         // PokefireredSymbols resolves to (fallback content or a real cached .sym) must be hidden.
+         Parser.PokefireredSymbols = new PokefireredSymbols(InstantDispatch.Instance, "02020630 g 00000004 gPlayerParty");
+         Parser.Compile(Token, Model, 0, "ldr r0, [pc, <004>]", "bx r0", "004: .word 02020630");
+
+         var text = Parser.Parse(Model, 0, 4);
+
+         Assert.DoesNotContain("gPlayerParty", text);
+      }
+
+      [Fact]
+      public void ThumbParser_ProjectLabels_BPRE0_ShowsSymbol() {
+         SetGameCode("BPRE0");
+         Parser.ProjectLabels = new ProjectLabels(new[] { "HubolFunc: 02020630" });
+         Parser.Compile(Token, Model, 0, "ldr r0, [pc, <004>]", "bx r0", "004: .word 02020630");
+
+         var text = Parser.Parse(Model, 0, 4);
+
+         Assert.Contains("HubolFunc", text);
+      }
+
+      [Fact]
+      public void ThumbParser_ProjectLabels_NotBPRE0_HidesSymbol() {
+         Parser.ProjectLabels = new ProjectLabels(new[] { "HubolFunc: 02020630" });
+         Parser.Compile(Token, Model, 0, "ldr r0, [pc, <004>]", "bx r0", "004: .word 02020630");
+
+         var text = Parser.Parse(Model, 0, 4);
+
+         Assert.DoesNotContain("HubolFunc", text);
+      }
+
       private void SelectRange(int start, int length) {
          ViewPort.SelectionStart = ViewPort.ConvertAddressToViewPoint(start);
          ViewPort.SelectionEnd = ViewPort.ConvertAddressToViewPoint(start + length - 1);
