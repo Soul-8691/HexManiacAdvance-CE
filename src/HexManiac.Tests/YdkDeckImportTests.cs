@@ -1,5 +1,6 @@
 using HavenSoft.HexManiac.Core.Models;
 using HavenSoft.HexManiac.Core.Models.Runs;
+using HavenSoft.HexManiac.Core.ViewModels.Tools;
 using System.Linq;
 using Xunit;
 
@@ -226,6 +227,65 @@ namespace HavenSoft.HexManiac.Tests {
          Assert.Equal(0, Model.ReadMultiByteValue(0x4C, 2)); // extraCount preserved at its new (shifted) offset
          Assert.Equal(0, Model[0x4E]); // stale trailing byte cleared
          Assert.Equal(0, Model[0x50]); // stale trailing byte cleared
+      }
+
+      // Reproduces "changing 40 to 41 manually doesn't expand the deck": typing a new count field
+      // value directly (no .ydk import involved at all) must also grow/shrink+repoint the array,
+      // via NotifyChildren -> StructRun.Resize.
+      [Fact]
+      public void EditMainCountFieldDirectly_GrowsArrayAndZeroFillsNewSlot() {
+         SetupCardTables();
+         Model.WriteMultiByteValue(0x48, 2, Token, 1); // mainCount = 1
+         Model.WriteMultiByteValue(0x4A, 2, Token, 3); // main[0] = BEW
+         Model.WriteMultiByteValue(0x4C, 2, Token, 0); // extraCount = 0
+         SetupDeckStruct();
+
+         var fieldViewModel = new FieldArrayElementViewModel(ViewPort, "mainCount", 0x48, 2, new NumericFieldStrategy());
+         fieldViewModel.Content = "2";
+
+         Assert.Equal(0x40, Model.ReadPointer(0x20)); // grew in place, no relocation needed
+         Assert.Equal(2, Model.ReadMultiByteValue(0x48, 2)); // mainCount is now 2
+         Assert.Equal(3, Model.ReadMultiByteValue(0x4A, 2)); // BEW - untouched
+         Assert.Equal(0, Model.ReadMultiByteValue(0x4C, 2)); // new slot, zero-filled
+         Assert.Equal(0, Model.ReadMultiByteValue(0x4E, 2)); // extraCount preserved at its new (shifted) offset
+      }
+
+      [Fact]
+      public void EditMainCountFieldDirectly_RelocatesWhenGrowthDoesNotFit() {
+         SetupCardTables();
+         Model.WriteMultiByteValue(0x48, 2, Token, 1); // mainCount = 1
+         Model.WriteMultiByteValue(0x4A, 2, Token, 3); // main[0] = BEW
+         Model.WriteMultiByteValue(0x4C, 2, Token, 0); // extraCount = 0
+         Model[0x4E] = 0x01; // block in-place growth
+         SetupDeckStruct();
+
+         var fieldViewModel = new FieldArrayElementViewModel(ViewPort, "mainCount", 0x48, 2, new NumericFieldStrategy());
+         fieldViewModel.Content = "2";
+
+         var newAddress = Model.ReadPointer(0x20);
+         Assert.NotEqual(0x40, newAddress); // pointer was fixed up to the relocated struct
+         Assert.Equal(2, Model.ReadMultiByteValue(newAddress + 8, 2)); // mainCount
+         Assert.Equal(3, Model.ReadMultiByteValue(newAddress + 10, 2)); // BEW - untouched
+         Assert.Equal(0, Model.ReadMultiByteValue(newAddress + 12, 2)); // new slot, zero-filled
+         Assert.Equal(0, Model.ReadMultiByteValue(newAddress + 14, 2)); // extraCount preserved
+      }
+
+      [Fact]
+      public void EditMainCountFieldDirectly_Shrinking_TruncatesAndClearsTrailingBytes() {
+         SetupCardTables();
+         Model.WriteMultiByteValue(0x48, 2, Token, 2); // mainCount = 2
+         Model.WriteMultiByteValue(0x4A, 2, Token, 3); // main[0] = BEW
+         Model.WriteMultiByteValue(0x4C, 2, Token, 1); // main[1] = BB1
+         Model.WriteMultiByteValue(0x4E, 2, Token, 0); // extraCount = 0
+         SetupDeckStruct();
+
+         var fieldViewModel = new FieldArrayElementViewModel(ViewPort, "mainCount", 0x48, 2, new NumericFieldStrategy());
+         fieldViewModel.Content = "1";
+
+         Assert.Equal(1, Model.ReadMultiByteValue(0x48, 2)); // mainCount is now 1
+         Assert.Equal(3, Model.ReadMultiByteValue(0x4A, 2)); // BEW - untouched
+         Assert.Equal(0, Model.ReadMultiByteValue(0x4C, 2)); // extraCount preserved at its new (shifted) offset
+         Assert.Equal(0, Model[0x4E]); // stale trailing byte cleared
       }
 
       [Fact]

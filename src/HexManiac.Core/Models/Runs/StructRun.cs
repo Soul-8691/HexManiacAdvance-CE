@@ -73,6 +73,98 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
          return result;
       }
 
+      /// <summary>
+      /// Resizes (and relocates, if the new content doesn't fit where the struct currently lives)
+      /// this struct so each key in `overrides` holds exactly its given values (its own count field
+      /// is updated to match). Any InlineArraySegment not present in `overrides` keeps its current
+      /// content, padded with 0s or truncated to whatever its count field's CURRENT model value
+      /// says - this covers a user directly editing a count field (the new value is already written
+      /// to the model before this runs; there's no new card data to go with it, just a longer or
+      /// shorter array of defaults). Every other field is carried across unchanged, at its
+      /// possibly-shifted new offset. Used by both .ydk import (explicit new card lists, see
+      /// YdkDeckImport) and NotifyChildren (a bare count-field edit).
+      /// </summary>
+      public IFormattedRun Resize(IDataModel model, ModelDelta token, IReadOnlyDictionary<InlineArraySegment, IReadOnlyList<int>> overrides) {
+         // how many elements each array currently has, according to THIS (possibly stale) instance:
+         // ElementContent was fixed at construction time and doesn't follow later, unrelated writes
+         // to the model, so it reflects "before" state even after the model's raw bytes have moved on.
+         var oldCounts = new Dictionary<ArrayRunElementSegment, int>();
+         {
+            int i = 0;
+            foreach (var spec in RawFieldSpecs) {
+               if (spec is InlineArraySegment arraySpec) {
+                  int count = 0;
+                  while (i < ElementContent.Count && ReferenceEquals(ElementContent[i], arraySpec.Template)) { count++; i++; }
+                  oldCounts[spec] = count;
+               } else {
+                  oldCounts[spec] = 1;
+                  i++;
+               }
+            }
+         }
+
+         var currentValues = new Dictionary<ArrayRunElementSegment, IReadOnlyList<int>>();
+         var currentOffsets = new Dictionary<ArrayRunElementSegment, int>();
+         {
+            int offset = 0;
+            foreach (var spec in RawFieldSpecs) {
+               currentOffsets[spec] = offset;
+               var slotLength = spec is InlineArraySegment ia ? ia.Template.Length : spec.Length;
+               var count = oldCounts[spec];
+               var values = new List<int>();
+               for (int i = 0; i < count; i++) values.Add(model.ReadMultiByteValue(Start + offset + i * slotLength, slotLength));
+               currentValues[spec] = values;
+               offset += slotLength * count;
+            }
+         }
+
+         var finalValues = new Dictionary<ArrayRunElementSegment, IReadOnlyList<int>>(currentValues);
+         foreach (var pair in overrides) {
+            finalValues[pair.Key] = pair.Value;
+            var countField = RawFieldSpecs.First(s => s.Name == pair.Key.CountFieldName);
+            finalValues[countField] = new[] { pair.Value.Count };
+         }
+
+         // any InlineArraySegment NOT given explicit new content still needs to match whatever its
+         // count field's CURRENT model value says - it may already have been written (e.g. the user
+         // just typed a new count directly, with no accompanying card data).
+         foreach (var spec in RawFieldSpecs) {
+            if (spec is not InlineArraySegment arraySpec || overrides.ContainsKey(arraySpec)) continue;
+            var countField = RawFieldSpecs.First(s => s.Name == arraySpec.CountFieldName);
+            var liveCount = model.ReadMultiByteValue(Start + currentOffsets[countField], countField.Length);
+            var old = currentValues[arraySpec];
+            if (liveCount == old.Count) continue;
+            var resized = old.Take(liveCount).ToList();
+            while (resized.Count < liveCount) resized.Add(0);
+            finalValues[arraySpec] = resized;
+            finalValues[countField] = new[] { liveCount };
+         }
+
+         var finalOffsets = new Dictionary<ArrayRunElementSegment, int>();
+         int newLength = 0;
+         foreach (var spec in RawFieldSpecs) {
+            finalOffsets[spec] = newLength;
+            var slotLength = spec is InlineArraySegment ia ? ia.Template.Length : spec.Length;
+            newLength += slotLength * finalValues[spec].Count;
+         }
+
+         var movedRun = model.RelocateForExpansion(token, this, newLength);
+         if (movedRun.Start == Start && newLength < Length) {
+            for (int i = newLength; i < Length; i++) token.ChangeData(model, Start + i, 0);
+         }
+
+         foreach (var spec in RawFieldSpecs) {
+            var values = finalValues[spec];
+            var slotLength = spec is InlineArraySegment ia ? ia.Template.Length : spec.Length;
+            var baseOffset = movedRun.Start + finalOffsets[spec];
+            for (int i = 0; i < values.Count; i++) model.WriteMultiByteValue(baseOffset + i * slotLength, slotLength, token, values[i]);
+         }
+
+         var finalRun = new StructRun(model, movedRun.Start, movedRun.PointerSources, FormatString, RawFieldSpecs);
+         model.ObserveRunWritten(token, finalRun);
+         return finalRun;
+      }
+
       public override IDataFormat CreateDataFormat(IDataModel data, int index) => this.CreateSegmentDataFormat(data, index);
 
       protected override BaseRun Clone(SortedSpan<int> newPointerSources) => new StructRun(model, Start, newPointerSources, FormatString, RawFieldSpecs);

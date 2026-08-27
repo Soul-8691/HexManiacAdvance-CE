@@ -222,6 +222,21 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
       }
 
       public static ErrorInfo NotifyChildren(this ITableRun self, IDataModel model, ModelDelta token, int elementIndex, int segmentIndex, int previousValue = 0xDedBeef) {
+         // a StructRun's InlineArraySegment fields (e.g. a deck's "main"/"extra" card lists) are
+         // sized by an earlier sibling count field, by plain name rather than a global anchor - so
+         // editing that count field directly (typing a new number) needs its own repoint/resize
+         // path here, distinct from the ArrayRunPointerSegment handling below (which reacts to a
+         // *pointer* field changing, not a plain integer one).
+         if (self is StructRun structRun && segmentIndex < self.ElementContent.Count) {
+            var editedFieldName = self.ElementContent[segmentIndex].Name;
+            var dependentArray = structRun.RawFieldSpecs.OfType<InlineArraySegment>().FirstOrDefault(spec => spec.CountFieldName == editedFieldName);
+            if (dependentArray != null) {
+               var newRun = structRun.Resize(model, token, new Dictionary<InlineArraySegment, IReadOnlyList<int>>());
+               if (newRun.Start != structRun.Start) return new ErrorInfo($"Data was automatically moved to {newRun.Start:X6}. Pointers were updated.", isWarningLevel: true);
+               return ErrorInfo.NoError;
+            }
+         }
+
          int offset = 0;
          var info = ErrorInfo.NoError;
          foreach (var segment in self.ElementContent) {
