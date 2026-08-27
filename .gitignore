@@ -36,3 +36,5 @@ docs/superpowers/
 
 # local json output (not published)
 /output/
+
+card_indexes.csv

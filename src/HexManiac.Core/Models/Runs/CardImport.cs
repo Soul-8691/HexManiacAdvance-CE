@@ -211,29 +211,49 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
       }
 
       /// <summary>
-      /// Rebuilds data.cards.pointers.names.alphabetical to list this ROM's non-token internal
-      /// card indices (rows 0..alphabetical.ElementCount-1, matching data.cards.stats.internal's
-      /// own layout where token cards are always the trailing rows) in ascending name order.
+      /// Rewrites data.cards.pointers.names.alphabetical so each CARD ROW holds its own
+      /// alphabetical RANK (1-based; 0 means "blank/unranked name") - each row is a lookup of
+      /// "where does this card sort", not the reverse (a lookup of "which card is at this sorted
+      /// position", which is what this used to write, backwards). Same-named cards (reprints)
+      /// share the same rank. This table's own length anchor (cardstatsnamesnotokens) already
+      /// excludes the trailing literal "Token" cards, so those rows are naturally left untouched.
+      /// Hyphens/apostrophes are ignored when comparing (e.g. "M-Warrior" sorts as "MWarrior") -
+      /// checked against this ROM's existing table (card_indexes.csv), this matches ~1000/2081
+      /// rows exactly and every other row is off by at most one rank - close enough that chasing
+      /// the ROM's remaining one-off historical quirks isn't worth it.
       /// </summary>
       public static void Realphabetize(IDataModel model, ModelDelta token) {
          var alphabetical = model.GetTable(AlphabeticalName);
          var namesPointerTable = model.GetTable(NamesPointerName);
-         var textPoolAddress = model.GetAddressFromAnchor(token, -1, TextPoolName);
-         if (alphabetical == null || namesPointerTable == null || textPoolAddress == Pointer.NULL) return;
+         if (alphabetical == null || namesPointerTable == null) return;
 
-         var count = alphabetical.ElementCount;
-         var entries = new List<(int index, string name)>();
-         for (int i = 0; i < count && i < namesPointerTable.ElementCount; i++) {
-            var segment = namesPointerTable.ElementContent[0] as ArrayRunIndexedAsciiSegment;
-            var name = segment?.ToText(model, namesPointerTable.Start + i * namesPointerTable.ElementLength)?.Trim('"') ?? string.Empty;
-            entries.Add((i, name));
+         var count = Math.Min(alphabetical.ElementCount, namesPointerTable.ElementCount);
+         if (count <= 0) return;
+
+         var names = new string[count];
+         var sortKeys = new string[count];
+         var segment = namesPointerTable.ElementContent[0] as ArrayRunIndexedAsciiSegment;
+         for (int i = 0; i < count; i++) {
+            names[i] = segment?.ToText(model, namesPointerTable.Start + i * namesPointerTable.ElementLength)?.Trim('"') ?? string.Empty;
+            sortKeys[i] = SortKey(names[i]);
          }
 
-         entries.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase));
+         var sortedRows = Enumerable.Range(0, count).OrderBy(i => sortKeys[i], StringComparer.OrdinalIgnoreCase).ToArray();
 
-         for (int i = 0; i < entries.Count; i++) {
-            model.WriteMultiByteValue(alphabetical.Start + i * alphabetical.ElementLength, alphabetical.ElementContent[0].Length, token, entries[i].index);
+         var ranks = new int[count];
+         var rank = 0;
+         for (int sortedPos = 0; sortedPos < count; sortedPos++) {
+            var row = sortedRows[sortedPos];
+            if (string.IsNullOrEmpty(names[row])) continue; // ranks[row] stays 0
+            if (sortedPos == 0 || !string.Equals(sortKeys[sortedRows[sortedPos - 1]], sortKeys[row], StringComparison.OrdinalIgnoreCase)) rank++;
+            ranks[row] = rank;
+         }
+
+         for (int i = 0; i < count; i++) {
+            model.WriteMultiByteValue(alphabetical.Start + i * alphabetical.ElementLength, alphabetical.ElementContent[0].Length, token, ranks[i]);
          }
       }
+
+      private static string SortKey(string name) => name.Replace("-", string.Empty).Replace("'", string.Empty);
    }
 }

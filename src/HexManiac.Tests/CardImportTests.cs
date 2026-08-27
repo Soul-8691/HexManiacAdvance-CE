@@ -156,14 +156,44 @@ namespace HavenSoft.HexManiac.Tests {
       public void Import_Realphabetizes() {
          SetupTables();
 
-         // card 1 (internal row 1, "CardB") gets renamed to something that alphabetically comes
-         // before whatever's at row 0, so the alphabetical table must reorder to [1, 0].
+         // each ROW holds its own alphabetical RANK (1-based) - not a lookup of which row sorts
+         // to a given position. Row 1 ("Aaa") sorts before row 0 ("Zzz"), so row 1 gets rank 1
+         // and row 0 gets rank 2.
          CardImport.Import(Model, Token, 1, new YgoProDeckCard { Id = 1, Name = "Aaa", Desc = "x", Type = "Normal Monster", Race = "Dragon", Attribute = "LIGHT" });
          CardImport.Import(Model, Token, 0, new YgoProDeckCard { Id = 2, Name = "Zzz", Desc = "y", Type = "Normal Monster", Race = "Dragon", Attribute = "LIGHT" });
 
          var alphabetical = Model.GetTable("data.cards.pointers.names.alphabetical");
+         Assert.Equal(2, Model.ReadMultiByteValue(alphabetical.Start, 2)); // row 0 ("Zzz") ranks 2nd
+         Assert.Equal(1, Model.ReadMultiByteValue(alphabetical.Start + 2, 2)); // row 1 ("Aaa") ranks 1st
+      }
+
+      [Fact]
+      public void Import_Realphabetizes_TiesSameNameToSameRank() {
+         SetupTables();
+
+         // both rows end up with the exact same name - they must share a rank (not get sequential
+         // ranks the way plain "sorted position" numbering would).
+         CardImport.Import(Model, Token, 0, new YgoProDeckCard { Id = 1, Name = "Same Name", Desc = "x", Type = "Normal Monster", Race = "Dragon", Attribute = "LIGHT" });
+         CardImport.Import(Model, Token, 1, new YgoProDeckCard { Id = 2, Name = "Same Name", Desc = "y", Type = "Normal Monster", Race = "Dragon", Attribute = "LIGHT" });
+
+         var alphabetical = Model.GetTable("data.cards.pointers.names.alphabetical");
          Assert.Equal(1, Model.ReadMultiByteValue(alphabetical.Start, 2));
-         Assert.Equal(0, Model.ReadMultiByteValue(alphabetical.Start + 2, 2));
+         Assert.Equal(1, Model.ReadMultiByteValue(alphabetical.Start + 2, 2));
+      }
+
+      [Fact]
+      public void Import_Realphabetizes_IgnoresHyphensAndApostrophesWhenComparing() {
+         SetupTables();
+
+         // "M-Warrior" and "MWarrior" must sort/tie identically - matches this ROM's own existing
+         // alphabetical table (see card_indexes.csv), which ignores hyphens/apostrophes when
+         // comparing names (e.g. "M-Warrior #1/#2" sort with the "MW..." names, not right after "M").
+         CardImport.Import(Model, Token, 0, new YgoProDeckCard { Id = 1, Name = "M-Warrior", Desc = "x", Type = "Normal Monster", Race = "Dragon", Attribute = "LIGHT" });
+         CardImport.Import(Model, Token, 1, new YgoProDeckCard { Id = 2, Name = "MWarrior", Desc = "y", Type = "Normal Monster", Race = "Dragon", Attribute = "LIGHT" });
+
+         var alphabetical = Model.GetTable("data.cards.pointers.names.alphabetical");
+         Assert.Equal(1, Model.ReadMultiByteValue(alphabetical.Start, 2));
+         Assert.Equal(1, Model.ReadMultiByteValue(alphabetical.Start + 2, 2));
       }
 
       [Fact]
