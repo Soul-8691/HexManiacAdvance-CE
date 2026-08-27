@@ -780,7 +780,12 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       public void ImportSpriteAndPalette(IFileSystem fileSystem) {
          string filename = null;
          var paletteRun = model.GetNextRun(paletteAddress) as IPaletteRun;
-         if (paletteRun != null && fileSystem.TryLoadIndexedImage(ref filename, out var pixels, out var palette) && palette.Count <= paletteRun.Pages * 16) {
+         // colors-per-page depends on the palette's own bit depth (16 for 4bpp, 64 for 6bpp, 256 for
+         // 8bpp) - hardcoding 16 here rejected any indexed PNG with a >16-color embedded palette
+         // (e.g. a 64-color 6bpp card palette), silently falling through to the non-indexed import
+         // path below and discarding the file's own palette entirely.
+         var colorsPerPage = paletteRun == null ? 0 : 1 << paletteRun.PaletteFormat.Bits;
+         if (paletteRun != null && fileSystem.TryLoadIndexedImage(ref filename, out var pixels, out var palette) && palette.Count <= paletteRun.Pages * colorsPerPage) {
             ImportSpriteAndPalette(fileSystem, pixels, palette);
             return;
          }
@@ -1296,13 +1301,17 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       }
 
       private Point WriteSpriteAndPalette(ISpriteRun spriteRun, IPaletteRun paletteRun, int[,] pixels, IReadOnlyList<short> palette, IReadOnlyList<int> usablePalPages, bool noSpriteEdits = false) {
-         if (noSpriteEdits || spriteRun is ITilemapRun || paletteRun == null || paletteRun.Pages != 1) {
+         // row-paired: an inline sprite/palette table pair with one full, independent palette per
+         // row (e.g. graphics.cards.sprites/.palettes - one row per card, not sub-pages of a single
+         // shared palette). Matches SyncPalettePageToSpritePage's own detection of this shape.
+         var rowPaired = paletteRun != null && paletteRun.Pages == spriteRun.Pages && paletteRun.Pages > 1;
+         if (noSpriteEdits || spriteRun is ITilemapRun || paletteRun == null || (paletteRun.Pages != 1 && !rowPaired)) {
             var (image, width) = Unindex(pixels, palette);
             return WriteSpriteAndPalette(spriteRun, paletteRun, image, usablePalPages, noSpriteEdits);
          }
 
          var newSprite = spriteRun.SetPixels(model, viewPort.CurrentChange, spritePage, pixels);
-         var newPalette = paletteRun.SetPalette(model, viewPort.CurrentChange, 0, palette);
+         var newPalette = paletteRun.SetPalette(model, viewPort.CurrentChange, rowPaired ? spritePage : 0, palette);
 
          ExplainMoves(spriteRun, newSprite, paletteRun, newPalette);
 
