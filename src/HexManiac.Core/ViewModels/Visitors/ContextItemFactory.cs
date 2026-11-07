@@ -251,8 +251,11 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Visitors {
             var result = YdkDeckImport.Import(ViewPort.Model, ViewPort.CurrentChange, tableRun, enumSegment, ydkText);
             ViewPort.ChangeHistory.ChangeCompleted();
             ViewPort.Refresh();
-            if (result.Skipped > 0) {
-               fileSystem.ShowCustomMessageBox($"Imported {result.Imported} card(s). {result.Skipped} password(s) were not found in {enumSegment.PasswordTableHint}.", showYesNoCancel: false);
+            if (result.Skipped > 0 || result.Note != null) {
+               var message = $"Imported {result.Imported} card(s).";
+               if (result.Skipped > 0) message += $" {result.Skipped} password(s) were not found in {enumSegment.PasswordTableHint}.";
+               if (result.Note != null) message += Environment.NewLine + Environment.NewLine + result.Note;
+               fileSystem.ShowCustomMessageBox(message, showYesNoCancel: false);
             }
          }));
       }

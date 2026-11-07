@@ -1,3 +1,4 @@
+using System;
 using HavenSoft.HexManiac.Core.Models;
 using HavenSoft.HexManiac.Core.Models.Runs;
 using HavenSoft.HexManiac.Core.ViewModels.Tools;
@@ -314,6 +315,84 @@ namespace HavenSoft.HexManiac.Tests {
          Assert.Equal(3, Model.ReadMultiByteValue(0x4A, 2)); // BEW
          Assert.Equal(1, Model.ReadMultiByteValue(0x4C, 2)); // extra count = 1 (shifted since main grew)
          Assert.Equal(1, Model.ReadMultiByteValue(0x4E, 2)); // BB1
+      }
+
+      // EDS stores passwords in text byte order: 89631139 is the bytes 89 63 11 39, which the
+      // `|h` field shows (read little-endian) as 39116389. Same cards and lists as SetupCardTables.
+      private void SetupTextOrderCardTables() {
+         Model.SetList(Token, "cardstatsnames", "BEW", "DDM", "BB1", "RA");
+         Model.SetList(Token, "cardnames", "RA", "BB1", "DDM", "BEW");
+         ViewPort.Edit("@00 ^data.cards.passwords[password::|h]cardstatsnames 39116389 78563412 01000000 99999999 ");
+      }
+
+      [Fact]
+      public void ImportYdk_TextOrderPasswords_Resolved() {
+         SetupTextOrderCardTables();
+         ViewPort.Edit("@20 ^data.decks.test[card:cardnames|data.cards.passwords]3 0 0 0 ");
+         var table = Model.GetTable("data.decks.test");
+
+         var result = YdkDeckImport.Import(Model, Token, table, (ArrayRunEnumSegment)table.ElementContent[0], Ydk);
+
+         Assert.Equal(3, result.Imported);
+         Assert.Equal(0, result.Skipped);
+         Assert.Equal(0, Model.ReadMultiByteValue(0x20, 2)); // RA
+         Assert.Equal(3, Model.ReadMultiByteValue(0x22, 2)); // BEW
+         Assert.Equal(1, Model.ReadMultiByteValue(0x24, 2)); // BB1
+      }
+
+      // EDS's mod decks: .main is a plain card array (Main Deck, then Fusion Deck) and .list the
+      // DeckList the game reads it through, `[cards<> count: unused:]1`.
+      private void SetupDeckList(int mainSlots) {
+         ViewPort.Edit($"@20 ^data.decks.mod.test.main[card:cardnames|data.cards.passwords]{mainSlots} ");
+         ViewPort.Edit($"@60 ^data.decks.mod.test.list[cards<> count: unused:]1 <020> {mainSlots} 0 ");
+      }
+
+      [Fact]
+      public void ImportYdk_DeckListMain_GrowsAndRelocatesWithMainThenExtraAndUpdatesCount() {
+         SetupTextOrderCardTables();
+         Array.Fill(Model.RawData, (byte)0xFF, 0x100, 0x100); // free space to grow into
+         SetupDeckList(2);
+         var table = Model.GetTable("data.decks.mod.test.main");
+
+         var result = YdkDeckImport.Import(Model, Token, table, (ArrayRunEnumSegment)table.ElementContent[0], Ydk);
+
+         Assert.Equal(4, result.Imported);
+         var moved = Model.GetTable("data.decks.mod.test.main");
+         Assert.Equal(4, moved.ElementCount);
+         Assert.Equal(moved.Start, Model.ReadPointer(0x60)); // .list follows the move
+         Assert.Equal(4, Model.ReadMultiByteValue(0x64, 2)); // count
+         Assert.Equal(new[] { 0, 3, 1, 2 }, Enumerable.Range(0, 4).Select(i => Model.ReadMultiByteValue(moved.Start + i * 2, 2)).ToArray()); // RA BEW BB1, then DDM (extra)
+      }
+
+      [Fact]
+      public void ImportYdk_DeckListMain_ShrinksInPlaceAndClearsFreedSlots() {
+         SetupTextOrderCardTables();
+         SetupDeckList(6);
+         var table = Model.GetTable("data.decks.mod.test.main");
+
+         var result = YdkDeckImport.Import(Model, Token, table, (ArrayRunEnumSegment)table.ElementContent[0], "#main\n89631139\n00000001\n");
+
+         Assert.Equal(2, result.Imported);
+         var shrunk = Model.GetTable("data.decks.mod.test.main");
+         Assert.Equal(0x20, shrunk.Start);
+         Assert.Equal(2, shrunk.ElementCount);
+         Assert.Equal(2, Model.ReadMultiByteValue(0x64, 2));
+         Assert.Equal(new[] { 3, 1 }, new[] { Model.ReadMultiByteValue(0x20, 2), Model.ReadMultiByteValue(0x22, 2) }); // BEW BB1
+         Assert.Equal(0xFFFF, Model.ReadMultiByteValue(0x24, 2)); // freed
+      }
+
+      [Fact]
+      public void ImportYdk_FixedSizeSide_FillsSlotsAndReportsSizeMismatch() {
+         SetupTextOrderCardTables();
+         ViewPort.Edit("@20 ^data.decks.mod.test.side[card:cardnames|data.cards.passwords]3 0 0 0 ");
+         var table = Model.GetTable("data.decks.mod.test.side");
+
+         var result = YdkDeckImport.Import(Model, Token, table, (ArrayRunEnumSegment)table.ElementContent[0], Ydk + "!side\n99999999\n");
+
+         Assert.Equal(1, result.Imported);
+         Assert.Equal(0, Model.ReadMultiByteValue(0x20, 2)); // RA
+         Assert.Equal(3, Model.GetTable("data.decks.mod.test.side").ElementCount); // not resized
+         Assert.Contains("fixed size of 3", result.Note);
       }
    }
 }
