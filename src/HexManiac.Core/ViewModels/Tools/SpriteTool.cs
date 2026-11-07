@@ -785,14 +785,49 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
          // (e.g. a 64-color 6bpp card palette), silently falling through to the non-indexed import
          // path below and discarding the file's own palette entirely.
          var colorsPerPage = paletteRun == null ? 0 : 1 << paletteRun.PaletteFormat.Bits;
-         if (paletteRun != null && fileSystem.TryLoadIndexedImage(ref filename, out var pixels, out var palette) && palette.Count <= paletteRun.Pages * colorsPerPage) {
-            ImportSpriteAndPalette(fileSystem, pixels, palette);
+         var fullPaletteColors = FullPaletteColorsPerImage(model.GetNextRun(spriteAddress) as ISpriteRun, paletteRun);
+         if (paletteRun != null && fileSystem.TryLoadIndexedImage(ref filename, out var pixels, out var palette) && (fullPaletteColors > 0 || palette.Count <= paletteRun.Pages * colorsPerPage)) {
+            ImportSpriteAndPalette(fileSystem, pixels, palette); // FitToPalettePage quantizes it if it uses too many colors
             return;
          }
          if (filename == null && paletteRun != null) return; // they didn't choose a file... they hit cancel. Don't continue trying to import.
 
          (short[] image, int width) = fileSystem.LoadImage(filename);
+         if (fullPaletteColors > 0 && image != null && width == PixelWidth && image.Length == PixelWidth * PixelHeight) {
+            var (indexed, indexedPalette) = IndexImage(image, width, fullPaletteColors);
+            ImportSpriteAndPalette(fileSystem, indexed, indexedPalette);
+            return;
+         }
          ImportSpriteAndPalette(fileSystem, image, width);
+      }
+
+      /// <summary>
+      /// The colours one image may use when it gets a whole palette of its own: a row-paired sprite/palette table (one
+      /// full palette per row, e.g. EDS's graphics.cards.images/.palettes: 64 colours a card) or a lone 6/8-bit palette.
+      /// 0 otherwise: a shared multi-page palette (the usual 4bpp case) keeps the per-tile palette discovery.
+      /// </summary>
+      private static int FullPaletteColorsPerImage(ISpriteRun spriteRun, IPaletteRun paletteRun) {
+         if (spriteRun == null || paletteRun == null) return 0;
+         var rowPaired = paletteRun.Pages == spriteRun.Pages && paletteRun.Pages > 1;
+         var lonePalette = paletteRun.Pages == 1 && paletteRun.PaletteFormat.Bits >= 6;
+         if (!rowPaired && !lonePalette) return 0;
+         return Math.Min(paletteRun.PaletteFormat.ExpectedByteLengthPerPage / 2, 1 << spriteRun.SpriteFormat.BitsPerPixel);
+      }
+
+      /// <summary>A true-colour image as pixel indices and a palette: its own colours if they fit, else quantized to `colors` (median cut).</summary>
+      public static (int[,] pixels, IReadOnlyList<short> palette) IndexImage(short[] image, int width, int colors) {
+         var height = image.Length / width;
+         var distinct = image.Distinct().ToList();
+         if (distinct.Count <= colors) {
+            var lookup = distinct.Select((color, i) => (color, i)).ToDictionary(pair => pair.color, pair => pair.i);
+            var pixels = new int[width, height];
+            for (int y = 0; y < height; y++) {
+               for (int x = 0; x < width; x++) pixels[x, y] = lookup[image[y * width + x]];
+            }
+            return (pixels, distinct);
+         }
+         var (indices, palette) = Models.Images.ImageQuantizer.MedianCutQuantize(Models.Images.ImageQuantizer.ToRgbGrid(image, width, height), colors);
+         return (indices, palette);
       }
 
       private void ImportSpriteAndPalette(IFileSystem fileSystem, int[,] pixels, IReadOnlyList<short> palette, ImportType importType = ImportType.Unknown) {
