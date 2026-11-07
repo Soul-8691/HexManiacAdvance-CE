@@ -1300,6 +1300,21 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
          ExplainMoves(spriteRun, newSprite, paletteRun, paletteRun);
       }
 
+      /// <summary>
+      /// An indexed PNG often carries a bigger palette than it uses (a 256-entry palette for a 64-colour 6bpp card
+      /// art). When the pixels only use the colours that fit the palette page (and the sprite's bit depth), the extra
+      /// entries are dropped; otherwise the image is re-quantized down to that many colours.
+      /// </summary>
+      public static (int[,] pixels, IReadOnlyList<short> palette) FitToPalettePage(int[,] pixels, IReadOnlyList<short> palette, int pageColors, int spriteColors) {
+         var capacity = Math.Min(pageColors, spriteColors);
+         if (palette.Count <= capacity) return (pixels, palette);
+         var maxIndex = 0;
+         foreach (var p in pixels) maxIndex = Math.Max(maxIndex, p);
+         if (maxIndex < capacity) return (pixels, palette.Take(capacity).ToList());
+         var (indices, quantized) = Models.Images.ImageQuantizer.MedianCutQuantize(Models.Images.ImageQuantizer.FromIndexed(pixels, palette), capacity);
+         return (indices, quantized);
+      }
+
       private Point WriteSpriteAndPalette(ISpriteRun spriteRun, IPaletteRun paletteRun, int[,] pixels, IReadOnlyList<short> palette, IReadOnlyList<int> usablePalPages, bool noSpriteEdits = false) {
          // row-paired: an inline sprite/palette table pair with one full, independent palette per
          // row (e.g. graphics.cards.sprites/.palettes - one row per card, not sub-pages of a single
@@ -1310,6 +1325,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
             return WriteSpriteAndPalette(spriteRun, paletteRun, image, usablePalPages, noSpriteEdits);
          }
 
+         (pixels, palette) = FitToPalettePage(pixels, palette, paletteRun.PaletteFormat.ExpectedByteLengthPerPage / 2, 1 << spriteRun.SpriteFormat.BitsPerPixel);
          var newSprite = spriteRun.SetPixels(model, viewPort.CurrentChange, spritePage, pixels);
          var newPalette = paletteRun.SetPalette(model, viewPort.CurrentChange, rowPaired ? spritePage : 0, palette);
 
