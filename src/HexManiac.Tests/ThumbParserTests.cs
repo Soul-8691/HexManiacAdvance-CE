@@ -172,6 +172,19 @@ namespace HavenSoft.HexManiac.Tests {
          Assert.DoesNotContain("gCardDetail", text);
       }
 
+      [Fact]
+      public void Singletons_BundledSymbolFiles_IncludeEdsBuildsAndResolve() {
+         // the real resources/ folder, as the built app sees it
+         var files = BaseViewModelTestClass.Singletons.SymbolFiles;
+         var names = files.Select(file => file.Name).ToList();
+
+         Assert.Contains("eds_demo.sym", names);
+         Assert.Contains("eds_release_demo.sym", names);
+         Assert.Contains("eds_release_demo_extra.sym", names);
+         var extra = files.Single(file => file.Name == "eds_release_demo_extra.sym");
+         Assert.Equal("DuelMainStep", extra.TryGetSymbol(0x0802224C));
+      }
+
       [Theory]
       [InlineData("BPRE0")]
       [InlineData("BY6E0")]
@@ -201,6 +214,37 @@ namespace HavenSoft.HexManiac.Tests {
          SelectRange(0, 4);
 
          Assert.False(string.IsNullOrEmpty(Model.GetAnchorFromAddress(-1, 0x200)));
+      }
+
+      [Fact]
+      public void ViewingCodeWithBl_GenericAnchorThenSymbolFileSelected_RenamedToSymbol() {
+         // eds_release_demo_extra.sym: 080083d4 g 00000012 CountActiveCardsOnField
+         Model.ExpandData(Token, 0x8400);
+         Parser.Compile(Token, Model, 0, "bl <83D4>");
+         Tool.Mode = CodeMode.Thumb;
+         Tool.IsSelected = true;
+         SelectRange(0, 4); // no symbols selected: generic name
+         Assert.Equal("code.0083D4", Model.GetAnchorFromAddress(-1, 0x83D4));
+
+         Tool.SelectedSymbolFileIndex = Tool.SymbolFileOptions.ToList().IndexOf("eds_release_demo_extra.sym");
+
+         Assert.Equal("CountActiveCardsOnField", Model.GetAnchorFromAddress(-1, 0x83D4));
+         Assert.Contains("<CountActiveCardsOnField>", Tool.Content);
+      }
+
+      [Fact]
+      public void ViewingCodeWithBl_UserNamedAnchor_NotRenamedBySymbolFile() {
+         Model.ExpandData(Token, 0x8400);
+         ViewPort.Refresh();
+         ViewPort.Edit("@83D4 ^myFunction @000 ");
+         Parser.Compile(Token, Model, 0, "bl <83D4>");
+         Tool.Mode = CodeMode.Thumb;
+         Tool.IsSelected = true;
+         Tool.SelectedSymbolFileIndex = Tool.SymbolFileOptions.ToList().IndexOf("eds_release_demo_extra.sym");
+
+         SelectRange(0, 4);
+
+         Assert.Equal("myFunction", Model.GetAnchorFromAddress(-1, 0x83D4));
       }
 
       [Fact]

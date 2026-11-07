@@ -214,7 +214,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
                UpdateContents(start, battleAIScript);
             } else if (mode == CodeMode.Thumb) {
                Editor.Content = thumb.Parse(model, start, end - start + 1);
-               AutoAnchorBranchLinkTargets(start, end - start + 1);
+               // re-parse if anchors were added/renamed, so a bl target shows its new name right away
+               if (AutoAnchorBranchLinkTargets(start, end - start + 1)) Editor.Content = thumb.Parse(model, start, end - start + 1);
                NotifyPropertyChanged(nameof(Content));
                CanRepointThumb = CalculateCanRepointThumb();
             } else {
@@ -233,12 +234,19 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       /// pokefirered/project-label symbol name over the generic "code.XXXXXX" scheme, so a target
       /// HMA already recognizes (and currently only shows as an inline ASM comment) gets a real,
       /// meaningfully-named anchor instead of a placeholder one.
+      /// A target already anchored with the generic name (e.g. auto-anchored while no .sym file was
+      /// selected) is renamed once a symbol for it is known; any other anchor name is left alone,
+      /// since the user (or a .toml) chose it.
       /// </summary>
-      private void AutoAnchorBranchLinkTargets(int start, int length) {
+      /// <returns>true if any anchor was added or renamed.</returns>
+      private bool AutoAnchorBranchLinkTargets(int start, int length) {
          var createdAny = false;
          foreach (var target in thumb.FindBranchLinkTargets(model, start, length)) {
             if (target < 0 || target >= model.Count) continue;
-            if (!string.IsNullOrEmpty(model.GetAnchorFromAddress(-1, target))) continue;
+            var genericName = $"code.{target:X6}";
+            var existingAnchor = model.GetAnchorFromAddress(-1, target);
+            var hasGenericAnchor = existingAnchor == genericName;
+            if (!string.IsNullOrEmpty(existingAnchor) && !hasGenericAnchor) continue;
             var existingRun = model.GetNextRun(target);
             if (existingRun.Start <= target && !(existingRun is NoInfoRun)) continue; // don't clobber a real, differently-formatted run
 
@@ -248,12 +256,14 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
             // when the loaded ROM actually is BPRE0 (or, for other ROMs, the user-selected .sym).
             var symbol = thumb.TryGetAddressSymbol(model, gbaAddress);
             var nameTaken = !string.IsNullOrEmpty(symbol) && model.GetAddressFromAnchor(history.CurrentChange, -1, symbol) != Pointer.NULL;
-            var name = !string.IsNullOrEmpty(symbol) && !nameTaken ? symbol : $"code.{target:X6}";
+            var name = !string.IsNullOrEmpty(symbol) && !nameTaken ? symbol : genericName;
+            if (hasGenericAnchor && name == genericName) continue; // nothing better to rename it to
 
-            model.ObserveAnchorWritten(history.CurrentChange, name, new NoInfoRun(target));
+            model.ObserveAnchorWritten(history.CurrentChange, name, existingRun.Start == target ? existingRun : new NoInfoRun(target));
             createdAny = true;
          }
          if (createdAny) history.ChangeCompleted();
+         return createdAny;
       }
 
       public void ClearConstantCache() {

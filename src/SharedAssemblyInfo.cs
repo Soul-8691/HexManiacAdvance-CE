@@ -12,11 +12,12 @@ using System.Diagnostics.CodeAnalysis;
 // (IsPublicRelease) and the displayed VersionNumber drops the trailing .0. The community
 // fork is branded by name ("Community Edition" in the title / About), not by the version
 // number, so these stay purely numeric and Haven-consistent. CE shows the full 4-part
-// string (Singletons.MetadataInfo), so this displays as "0.5.7.1". Revision 1 (like the
-// prior 0.5.6.1 release) means IsPublicRelease is false - that only gates a commented-out
-// beta-features block, matching how every "Public Update x.y.z.1" build has shipped.
-[assembly: AssemblyVersion("0.5.7.1")]
-[assembly: AssemblyFileVersion("0.5.7.1")]
+// string (Singletons.MetadataInfo), so this displays as "0.5.7.2". Revision 2 (like the
+// prior 0.5.6.1 release, any non-zero revision) means IsPublicRelease is false - that only
+// gates a commented-out beta-features block, matching how every "Public Update x.y.z.1"
+// build has shipped.
+[assembly: AssemblyVersion("0.5.7.2")]
+[assembly: AssemblyFileVersion("0.5.7.2")]
 
 
 // AutoImplement style issues are expected, since it's compatible with earlier versions of C#.
