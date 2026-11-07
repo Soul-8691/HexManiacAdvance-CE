@@ -66,6 +66,24 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
          }
       }
 
+      /// <summary>"None" followed by each resources/*.sym file, for the Code Tool's symbol file selector.</summary>
+      public IReadOnlyList<string> SymbolFileOptions { get; }
+
+      /// <summary>FireRed and WCT06 have their own symbol sources, so only offer a .sym choice for other ROMs.</summary>
+      public bool ShowSymbolFileSelector => ThumbParser.UsesSelectableSymbols(model) && singletons.SymbolFiles.Count > 0;
+
+      private int selectedSymbolFileIndex;
+      public int SelectedSymbolFileIndex {
+         get => selectedSymbolFileIndex;
+         set {
+            if (value < 0 || value >= SymbolFileOptions.Count || selectedSymbolFileIndex == value) return;
+            selectedSymbolFileIndex = value;
+            thumb.SelectedSymbolFile = value == 0 ? null : singletons.SymbolFiles[value - 1];
+            NotifyPropertyChanged();
+            if (mode == CodeMode.Thumb) UpdateContent();
+         }
+      }
+
       public CodeMode Mode {
          get => mode;
          set {
@@ -117,6 +135,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
          this.singletons = singletons;
          var gameHash = viewPort.Model.GetShortGameCode();
          thumb = new ThumbParser(singletons);
+         SymbolFileOptions = new[] { "None" }.Concat(singletons.SymbolFiles.Select(file => file.Name)).ToList();
          script = new ScriptParser(gameHash, singletons.ScriptLines, 0x02);
          battleScript = new ScriptParser(gameHash, singletons.BattleScriptLines, 0x3D);
          animationScript = new ScriptParser(gameHash, singletons.AnimationScriptLines, 0x08);
@@ -226,8 +245,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
             var gbaAddress = target + BaseModel.PointerOffset;
             // pokefirered/HUBOL symbols are FireRed-specific - a numeric match in an unrelated ROM
             // is meaningless coincidence, so only prefer them over the generic "code.XXXXXX" name
-            // when the loaded ROM actually is BPRE0.
-            var symbol = model.GetGameCode() == "BPRE0" ? singletons.PokefireredSymbols.TryGetSymbol(gbaAddress) ?? singletons.ProjectLabels.TryGetSymbol(gbaAddress) : null;
+            // when the loaded ROM actually is BPRE0 (or, for other ROMs, the user-selected .sym).
+            var symbol = thumb.TryGetAddressSymbol(model, gbaAddress);
             var nameTaken = !string.IsNullOrEmpty(symbol) && model.GetAddressFromAnchor(history.CurrentChange, -1, symbol) != Pointer.NULL;
             var name = !string.IsNullOrEmpty(symbol) && !nameTaken ? symbol : $"code.{target:X6}";
 

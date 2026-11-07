@@ -47,6 +47,8 @@ namespace HavenSoft.HexManiac.Core.Models {
       public PokefireredSymbols PokefireredSymbols { get; }
       public ProjectLabels ProjectLabels { get; }
       public CardSymbols CardSymbols { get; }
+      /// <summary>Optional, user-selected *.sym files from resources/ (e.g. eds_demo.sym), for non-FireRed/WCT06 ROMs.</summary>
+      public IReadOnlyList<SymbolFile> SymbolFiles { get; }
       public int CopyLimit { get; }
 
       public Singletons(IWorkDispatcher dispatcher = null, int copyLimit = 40000) {
@@ -65,6 +67,7 @@ namespace HavenSoft.HexManiac.Core.Models {
          PokefireredSymbols = new PokefireredSymbols(WorkDispatcher, pokefireredText);
          ProjectLabels = new ProjectLabels(LoadProjectLabelFiles());
          CardSymbols = new CardSymbols(LoadCardSymbolFiles());
+         SymbolFiles = LoadSymbolFiles();
          CopyLimit = copyLimit;
       }
 
@@ -78,6 +81,15 @@ namespace HavenSoft.HexManiac.Core.Models {
       private static IEnumerable<string> LoadCardSymbolFiles() {
          if (!Directory.Exists(ProjectLabelsDirectory)) return Enumerable.Empty<string>();
          return Directory.GetFiles(ProjectLabelsDirectory, "*.h").Select(File.ReadAllText).ToArray();
+      }
+
+      private static IReadOnlyList<SymbolFile> LoadSymbolFiles() {
+         if (!Directory.Exists(ProjectLabelsDirectory)) return new SymbolFile[0];
+         // parsed lazily: only the file the user actually selects ever gets read
+         return Directory.GetFiles(ProjectLabelsDirectory, "*.sym")
+            .OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)
+            .Select(file => new SymbolFile(Path.GetFileName(file), () => File.ReadAllText(file)))
+            .ToArray();
       }
 
       public Singletons(IMetadataInfo metadataInfo, IReadOnlyDictionary<string, GameReferenceTables> gameReferenceTables, int copyLimit = 40000) : this(metadataInfo, gameReferenceTables, null, copyLimit) { }
@@ -99,6 +111,7 @@ namespace HavenSoft.HexManiac.Core.Models {
          PokefireredSymbols = new PokefireredSymbols(WorkDispatcher, string.Empty);
          ProjectLabels = new ProjectLabels();
          CardSymbols = new CardSymbols();
+         SymbolFiles = new SymbolFile[0];
       }
 
       private IReadOnlyList<IScriptLine> LoadScriptReference<TLine>(string file) where TLine : ScriptLine {

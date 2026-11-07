@@ -66,6 +66,8 @@
       del "$(TargetDir)Models\Code\*.py"
       copy "$(TargetDir)Models\Code\*.ini" "$(TargetDir)resources"
       del "$(TargetDir)Models\Code\*.ini"
+      copy "$(TargetDir)Models\Code\*.sym" "$(TargetDir)resources"
+      del "$(TargetDir)Models\Code\*.sym"
       copy "$(SolutionDir)src\HexManiac.WPF\Scripts\*.hma" "$(TargetDir)resources\Scripts"
       mkdir "$(TargetDir)resources\CardIcons"
       copy "$(SolutionDir)src\HexManiac.WPF\Resources\CardIcons\*.png" "$(TargetDir)resources\CardIcons"

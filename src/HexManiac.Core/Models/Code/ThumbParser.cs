@@ -29,6 +29,35 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       /// <summary>Mutable for the same reason as CardSymbols. Same BPRE0 gate as PokefireredSymbols.</summary>
       public ProjectLabels ProjectLabels { get; set; }
 
+      /// <summary>A user-chosen .sym file (e.g. eds_demo.sym), or null for none. Only consulted
+      /// for ROMs that aren't FireRed (BPRE0, which gets pokefirered symbols automatically) or
+      /// WCT06 (BY6E) - see UsesSelectableSymbols.</summary>
+      public SymbolFile SelectedSymbolFile { get; set; }
+
+      public static bool UsesSelectableSymbols(IReadOnlyList<byte> data) {
+         var code = data.GetGameCode();
+         return code != "BPRE0" && !code.StartsWith("BY6E");
+      }
+
+      /// <summary>Symbol for an absolute GBA address, from whichever source applies to this ROM.</summary>
+      public string TryGetAddressSymbol(IReadOnlyList<byte> data, int gbaAddress) {
+         if (data.GetGameCode() == "BPRE0") return PokefireredSymbols.TryGetSymbol(gbaAddress) ?? ProjectLabels.TryGetSymbol(gbaAddress);
+         if (SelectedSymbolFile != null && UsesSelectableSymbols(data)) return SelectedSymbolFile.TryGetSymbol(gbaAddress);
+         return null;
+      }
+
+      /// <summary>Like TryGetAddressSymbol, but for a .word/ldr literal that may also be a Thumb function pointer (bit0 set).</summary>
+      public string TryGetLiteralSymbol(IReadOnlyList<byte> data, int value) {
+         if (data.GetGameCode() == "BPRE0") {
+            return PokefireredSymbols.TryGetSymbol(value) ?? PokefireredSymbols.TryGetFunctionPointerSymbol(value)
+                ?? ProjectLabels.TryGetSymbol(value) ?? ProjectLabels.TryGetFunctionPointerSymbol(value);
+         }
+         if (SelectedSymbolFile != null && UsesSelectableSymbols(data)) {
+            return SelectedSymbolFile.TryGetSymbol(value) ?? SelectedSymbolFile.TryGetFunctionPointerSymbol(value);
+         }
+         return null;
+      }
+
       public ThumbParser(Singletons singletons) {
          conditionalCodes.AddRange(singletons.ThumbConditionalCodes);
          instructionTemplates.AddRange(singletons.ThumbInstructionTemplates);
@@ -127,7 +156,7 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                            // number, since it's usually a real address), a card-ID literal isn't
                            // meaningful as a number to the reader - replace it outright.
                            valueText = cardSymbol;
-                        } else if (string.IsNullOrEmpty(anchor) && data.GetGameCode() == "BPRE0") {
+                        } else if (string.IsNullOrEmpty(anchor)) {
                            // a .word/ldr literal is frequently a raw pointer (often a RAM address
                            // like 0x02xxxxxx EWRAM), so look it up as-is rather than as a file offset.
                            // It may also be a Thumb function pointer (used for an indirect call),
@@ -135,21 +164,20 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
                            // real instruction address in that case. Keep the address visible and
                            // add the symbol name alongside it (don't replace one with the other).
                            // pokefirered/HUBOL symbols are FireRed-specific: matching numbers in an
-                           // unrelated ROM are meaningless coincidence, so only look them up at all
-                           // when the loaded ROM actually is BPRE0.
-                           var symbol = PokefireredSymbols.TryGetSymbol(value) ?? PokefireredSymbols.TryGetFunctionPointerSymbol(value)
-                                     ?? ProjectLabels.TryGetSymbol(value) ?? ProjectLabels.TryGetFunctionPointerSymbol(value);
+                           // unrelated ROM are meaningless coincidence, so they're only used for
+                           // BPRE0. Other ROMs use whichever .sym file (if any) the user selected.
+                           var symbol = TryGetLiteralSymbol(data, value);
                            if (!string.IsNullOrEmpty(symbol)) valueText += $" ({symbol})";
                         }
                         line = AppendInlineComment(line, $"@ = {valueText}");
-                     } else if (string.IsNullOrEmpty(data.GetAnchorFromAddress(-1, address)) && data.GetGameCode() == "BPRE0") {
+                     } else if (string.IsNullOrEmpty(data.GetAnchorFromAddress(-1, address))) {
                         // an un-named branch/call/data target: label it if it's a known pokefirered
                         // or project-specific (e.g. CFRU/DPE) ROM symbol, looked up by the
                         // GBA-mapped address, not the raw file offset. Show the address alongside
                         // the symbol name, matching how HMA already labels known ROM anchors.
                         // See the BPRE0 gate above - these symbols are meaningless outside FireRed.
                         var gbaAddress = address + BaseModel.PointerOffset;
-                        var symbol = PokefireredSymbols.TryGetSymbol(gbaAddress) ?? ProjectLabels.TryGetSymbol(gbaAddress);
+                        var symbol = TryGetAddressSymbol(data, gbaAddress);
                         if (!string.IsNullOrEmpty(symbol)) {
                            line = AppendInlineComment(line, $"@ 0x{gbaAddress:X8} ({symbol})");
                         }

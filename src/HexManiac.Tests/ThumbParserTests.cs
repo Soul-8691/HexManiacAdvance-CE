@@ -1,4 +1,4 @@
-using HavenSoft.HexManiac.Core;
+﻿using HavenSoft.HexManiac.Core;
 using HavenSoft.HexManiac.Core.Models;
 using HavenSoft.HexManiac.Core.Models.Code;
 using HavenSoft.HexManiac.Core.ViewModels.Tools;
@@ -151,6 +151,40 @@ namespace HavenSoft.HexManiac.Tests {
          var text = Parser.Parse(Model, 0, 4);
 
          Assert.DoesNotContain("HubolFunc", text);
+      }
+
+      [Fact]
+      public void ThumbParser_SelectedSymbolFile_OtherRom_ShowsSymbol() {
+         Parser.SelectedSymbolFile = new SymbolFile("eds_demo.sym", "02013d90 g 00000050 gCardDetail");
+         Parser.Compile(Token, Model, 0, "ldr r0, [pc, <004>]", "bx r0", "004: .word 02013D90");
+
+         var text = Parser.Parse(Model, 0, 4);
+
+         Assert.Contains("gCardDetail", text);
+      }
+
+      [Fact]
+      public void ThumbParser_NoSymbolFileSelected_OtherRom_HidesSymbol() {
+         Parser.Compile(Token, Model, 0, "ldr r0, [pc, <004>]", "bx r0", "004: .word 02013D90");
+
+         var text = Parser.Parse(Model, 0, 4);
+
+         Assert.DoesNotContain("gCardDetail", text);
+      }
+
+      [Theory]
+      [InlineData("BPRE0")]
+      [InlineData("BY6E0")]
+      public void ThumbParser_SelectedSymbolFile_FireRedOrWct06_Ignored(string gameCode) {
+         SetGameCode(gameCode);
+         Parser.PokefireredSymbols = new PokefireredSymbols(InstantDispatch.Instance, string.Empty);
+         Parser.ProjectLabels = new ProjectLabels();
+         Parser.SelectedSymbolFile = new SymbolFile("eds_demo.sym", "02013d90 g 00000050 gCardDetail");
+         Parser.Compile(Token, Model, 0, "ldr r0, [pc, <004>]", "bx r0", "004: .word 02013D90");
+
+         var text = Parser.Parse(Model, 0, 4);
+
+         Assert.DoesNotContain("gCardDetail", text);
       }
 
       private void SelectRange(int start, int length) {

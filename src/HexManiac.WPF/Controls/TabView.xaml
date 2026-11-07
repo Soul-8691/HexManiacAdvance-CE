@@ -961,6 +961,17 @@
                   <TextBlock Text="Code Type" Margin="5,0" Grid.Column="0"/>
                   <hsg3hv:AngleComboBox Height="22" Direction="Out" Grid.Column="1" x:Name="CodeModeSelector" SelectedItem="{Binding CodeTool.Mode}"/>
                </Grid>
+               <Grid HorizontalAlignment="Stretch" Margin="2" DockPanel.Dock="Top"
+                     Visibility="{Binding CodeTool.ShowSymbolFileSelector, Converter={StaticResource BoolToVisibility}}"
+                     ToolTip="In the Thumb view, label branch targets and .word literals using a .sym file from resources/. Only offered for ROMs other than FireRed (which uses pokefirered symbols automatically) and WCT06.">
+                  <Grid.ColumnDefinitions>
+                     <ColumnDefinition Width="Auto" SharedSizeGroup="LeftColumn"/>
+                     <ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="Symbols" Margin="5,0" Grid.Column="0"/>
+                  <hsg3hv:AngleComboBox Height="22" Direction="Out" Grid.Column="1"
+                                        ItemsSource="{Binding CodeTool.SymbolFileOptions}" SelectedIndex="{Binding CodeTool.SelectedSymbolFileIndex}"/>
+               </Grid>
                <CheckBox Margin="5,1" DockPanel.Dock="Top" Content="Show Card Names" IsChecked="{Binding CodeTool.ShowCardNames}"
                          ToolTip="In the Thumb view, show `.word` literals that match a known card ID (from a *.h file in resources/) by name instead of by number."/>
                <Grid Name="CodeToolBody" DataContext="{Binding CodeTool}" PreviewMouseWheel="WheelCodeBody" TextBlock.FontSize="{Binding FontSize}">

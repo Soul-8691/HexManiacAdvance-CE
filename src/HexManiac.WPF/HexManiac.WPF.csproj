@@ -77,6 +77,8 @@
       del "$(TargetDir)Models\Code\*.py"
       copy "$(TargetDir)Models\Code\*.ini" "$(TargetDir)resources"
       del "$(TargetDir)Models\Code\*.ini"
+      copy "$(TargetDir)Models\Code\*.sym" "$(TargetDir)resources"
+      del "$(TargetDir)Models\Code\*.sym"
       xcopy "$(TargetDir)Scripts" "$(TargetDir)resources/Scripts" /i /c /k /e /r /y
       copy "$(SolutionDir)src\HexManiac.WPF\Resources\Yogia16.graphics.titlescreen.copyright.tilemap.png" "$(TargetDir)resources"
       copy "$(SolutionDir)src\HexManiac.WPF\Resources\Yogia16-dark.graphics.titlescreen.copyright.tilemap.png" "$(TargetDir)resources"
