@@ -463,6 +463,16 @@ namespace HavenSoft.HexManiac.WPF.Implementations {
       }
 
       public bool TryDecodeImage(byte[] data, out short[] image, out int width, out int height) {
+         if (TryDecodeImageOnce(data, out image, out width, out height)) return true;
+         // WPF rejects some JPEGs' metadata (e.g. an Exif block) before reading any pixels: retry without it
+         if (!HavenSoft.HexManiac.Core.Models.Images.JpegMetadata.IsJpeg(data)) return false;
+         var stripped = HavenSoft.HexManiac.Core.Models.Images.JpegMetadata.StripMetadata(data);
+         if (stripped != null && TryDecodeImageOnce(stripped, out image, out width, out height)) return true;
+         stripped = HavenSoft.HexManiac.Core.Models.Images.JpegMetadata.StripMetadata(data, includeColorProfile: true);
+         return stripped != null && TryDecodeImageOnce(stripped, out image, out width, out height);
+      }
+
+      private bool TryDecodeImageOnce(byte[] data, out short[] image, out int width, out int height) {
          (image, width, height) = (null, 0, 0);
          try {
             using (var stream = new MemoryStream(data)) {

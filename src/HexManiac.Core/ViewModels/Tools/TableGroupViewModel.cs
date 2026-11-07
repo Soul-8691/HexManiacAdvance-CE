@@ -164,6 +164,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       private void AddCardImportButtonToGroup(IViewPort viewPort, ITableRun table, int index) {
          if (!(viewPort is ViewPort vp) || vp.FileSystem == null) return;
          var anchor = vp.Model.GetAnchorFromAddress(-1, table.Start);
+         if (anchor == EdsCardImport.StatsName && EdsCardImport.CanImport(vp.Model)) {
+            Add(new ButtonArrayElementViewModel("Import from YGOProDeck", () => RunCardImport(vp, table, index)));
+            return;
+         }
          if (anchor != CardImport.StatsInternalName && anchor != CardImport.StatsKonamiName) return;
          if (!CardImport.CanImport(vp.Model)) return;
          Add(new ButtonArrayElementViewModel("Import from YGOProDeck", () => RunCardImport(vp, table, index)));
@@ -209,6 +213,11 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
             card = results[choice];
          }
 
+         if (EdsCardImport.CanImport(viewPort.Model) && viewPort.Model.GetAnchorFromAddress(-1, table.Start) == EdsCardImport.StatsName) {
+            ApplyEdsCardImport(viewPort, fs, index, card);
+            return;
+         }
+
          var internalIndex = CardImport.ResolveInternalIndex(viewPort.Model, table, index);
          if (internalIndex < 0) {
             fs.ShowCustomMessageBox("Could not find a matching row in data.cards.stats.internal for this card.", showYesNoCancel: false);
@@ -225,6 +234,32 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
                viewPort.Dispatcher.BlockOnUIWork(() => ApplyCardGraphicsResult(viewPort, fs, internalIndex, imageBytes));
             });
          }
+      }
+
+      /// <summary>EDS: the stats row is the card ID that every other card table shares.</summary>
+      private static void ApplyEdsCardImport(ViewPort viewPort, IFileSystem fs, int cardId, YgoProDeckCard card) {
+         string gameName = null;
+         if ((card.Name ?? string.Empty).Length > EdsCardImport.MaxNameLength) {
+            gameName = fs.RequestText("Import from YGOProDeck",
+               $"\"{card.Name}\" is {card.Name.Length} characters, but a Deck Edit row shows {EdsCardImport.MaxNameLength}. Enter a shorter in-game name (empty: cut it):");
+            if (string.IsNullOrWhiteSpace(gameName)) gameName = null;
+         }
+
+         var result = EdsCardImport.Import(viewPort.Model, viewPort.CurrentChange, cardId, card, gameName);
+         viewPort.Tools.TableTool.DataForCurrentRunChanged();
+         fs.ShowCustomMessageBox(result.Message, showYesNoCancel: false);
+         if (!result.Success || string.IsNullOrEmpty(card.ImageUrlCropped) || !EdsCardImport.CanImportGraphics(viewPort.Model)) return;
+
+         RunOnBackgroundReportingErrors(viewPort, fs, () => {
+            var imageBytes = YgoProDeckClient.DownloadImageBytes(card.ImageUrlCropped);
+            viewPort.Dispatcher.BlockOnUIWork(() => {
+               var graphics = imageBytes == null
+                  ? new EdsCardImport.Result(false, "Could not download this card's art.")
+                  : EdsCardImport.ImportGraphics(viewPort.Model, viewPort.CurrentChange, fs, cardId, imageBytes);
+               if (!graphics.Success) fs.ShowCustomMessageBox(graphics.Message, showYesNoCancel: false);
+               viewPort.Tools.TableTool.DataForCurrentRunChanged();
+            });
+         });
       }
 
       private static void ApplyCardGraphicsResult(ViewPort viewPort, IFileSystem fs, int internalIndex, byte[] imageBytes) {

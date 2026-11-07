@@ -70,8 +70,11 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
          if (!string.IsNullOrEmpty(card.Desc)) ImportText(model, token, DescriptionsPointerName, textPoolAddress, internalIndex, card.Desc);
 
          var passwordLength = passwordsTable.ElementContent[0].Length;
-         if (internalIndex < passwordsTable.ElementCount) {
-            model.WriteMultiByteValue(passwordsTable.Start + internalIndex * passwordsTable.ElementLength, passwordLength, token, card.Id);
+         // passwords are packed BCD, little-endian (WCT06: Blue-Eyes White Dragon, 89631139, reads back as
+         // 0x89631139), so the password's decimal digits are written as hex digits - matching YdkDeckImport.
+         if (internalIndex < passwordsTable.ElementCount && card.Id > 0 && card.Id <= 99999999) {
+            var bcd = int.Parse(card.Id.ToString("D8"), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
+            model.WriteMultiByteValue(passwordsTable.Start + internalIndex * passwordsTable.ElementLength, passwordLength, token, bcd);
          }
 
          Realphabetize(model, token);
@@ -146,7 +149,7 @@ namespace HavenSoft.HexManiac.Core.Models.Runs {
          if (!string.IsNullOrEmpty(internalNameList)) UpdateListEntry(model, token, internalNameList, internalIndex, name);
       }
 
-      private static void UpdateListEntry(IDataModel model, ModelDelta token, string listName, int index, string value) {
+      internal static void UpdateListEntry(IDataModel model, ModelDelta token, string listName, int index, string value) {
          if (!model.TryGetList(listName, out var list) || index < 0 || index >= list.Count) return;
          if (list[index] == value) return;
          var updated = list.ToList();

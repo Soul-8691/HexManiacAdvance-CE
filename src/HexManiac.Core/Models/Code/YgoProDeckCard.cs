@@ -35,6 +35,13 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       [JsonPropertyName("attribute")]
       public string Attribute { get; set; }
 
+      // a Link Monster's Link Rating (it has no level) and its Link Arrows ("Top-Left", "Bottom", ...)
+      [JsonPropertyName("linkval")]
+      public int? LinkVal { get; set; }
+
+      [JsonPropertyName("linkmarkers")]
+      public string[] LinkMarkers { get; set; }
+
       [JsonPropertyName("card_images")]
       public YgoProDeckCardImage[] CardImages { get; set; }
 

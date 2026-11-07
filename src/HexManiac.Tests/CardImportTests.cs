@@ -113,7 +113,7 @@ namespace HavenSoft.HexManiac.Tests {
 
          CardImport.Import(Model, Token, 0, MonsterCard());
 
-         Assert.Equal(12345678, Model.ReadMultiByteValue(0x80, 4));
+         Assert.Equal(0x12345678, Model.ReadMultiByteValue(0x80, 4)); // BCD: the password's digits as hex digits
       }
 
       [Fact]
