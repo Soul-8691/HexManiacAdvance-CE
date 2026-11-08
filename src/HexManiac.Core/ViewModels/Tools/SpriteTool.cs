@@ -744,7 +744,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
          prevPalPage.CanExecuteChanged.Invoke(prevPalPage, EventArgs.Empty);
          nextPalPage.CanExecuteChanged.Invoke(nextPalPage, EventArgs.Empty);
 
-         Colors.SourcePalettePointer = run?.PointerSources?.FirstOrDefault() ?? Pointer.NULL;
+         // by address: a palette needn't have a pointer to it (an inline palette table row, e.g. EDS's
+         // graphics.cards.icons.palettes), and an empty PointerSources' FirstOrDefault() is 0, not NULL
+         Colors.SourcePaletteAddress = run?.Start ?? Pointer.NULL;
+         Colors.SourcePalettePointer = run?.PointerSources != null && run.PointerSources.Count > 0 ? run.PointerSources[0] : Pointer.NULL;
          Colors.SetContents(palette);
          Colors.Page = palPage;
          Colors.HasMultiplePages = palPages > 1;

@@ -29,13 +29,33 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       private readonly IDataModel model;
       private readonly ChangeHistory<ModelDelta> history;
 
-      private int sourcePalettePointer;
+      private int sourcePalettePointer; // 0 by default: a model-less (spare colors) collection stays editable
+      /// <summary>A pointer to the palette: needed only to repoint a compressed palette whose data is bad (RepointIfBadData).</summary>
       public int SourcePalettePointer { get => sourcePalettePointer; set => Set(ref sourcePalettePointer, value); }
+
+      private int sourcePaletteAddress = Pointer.NULL;
+      /// <summary>
+      /// The palette's own address. Set by the Sprite Tool, which always knows it: a palette needn't have a pointer
+      /// to it (e.g. an inline palette table like EDS's graphics.cards.icons.palettes, reached by code or a table
+      /// hint), and then SourcePalettePointer alone can't find it. When unset, the pointer is followed.
+      /// </summary>
+      public int SourcePaletteAddress { get => sourcePaletteAddress; set => Set(ref sourcePaletteAddress, value); }
       public ObservableCollection<SelectableColor> Elements { get; } = new();
 
       public int ColorWidth => Elements.Count / ColorHeight;
       public int ColorHeight => (int)Math.Ceiling(Math.Sqrt(Elements.Count));
-      public bool CanEditColors => SourcePalettePointer >= 0 && page >= 0 && (model == null || SourcePalettePointer <= model.Count - 4);
+      public bool CanEditColors => page >= 0 && (HasValidAddress || HasValidPointer);
+
+      private bool HasValidAddress => SourcePaletteAddress >= 0 && (model == null || SourcePaletteAddress < model.Count);
+      private bool HasValidPointer => SourcePalettePointer >= 0 && (model == null || SourcePalettePointer <= model.Count - 4);
+
+      /// <summary>The palette run being edited, by its address if known, else through its pointer.</summary>
+      private IPaletteRun GetSourcePalette() {
+         if (model == null) return null;
+         if (HasValidAddress && model.GetNextRun(SourcePaletteAddress) is IPaletteRun byAddress && byAddress.Start == SourcePaletteAddress) return byAddress;
+         if (!HasValidPointer) return null;
+         return model.GetNextRun(model.ReadPointer(SourcePalettePointer)) as IPaletteRun;
+      }
 
       public int SpriteBitsPerPixel { get; set; }
 
@@ -198,8 +218,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
 
       public void PushColorsToModel() {
          if (model == null || !CanEditColors) return;
-         int sourcePalette = model.ReadPointer(sourcePalettePointer);
-         if (!(model.GetNextRun(sourcePalette) is IPaletteRun source)) return;
+         if (GetSourcePalette() is not IPaletteRun source) return;
          if (page < 0) {
             tab.RaiseMessage("Cannot edit colors for a default palette page!");
             return;
@@ -241,9 +260,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
 
       private void ReorderPalette() {
          if (model == null || !CanEditColors) return;
-         if (sourcePalettePointer < 0 || sourcePalettePointer > model.Count - 4) return;
-         int sourcePalette = model.ReadPointer(sourcePalettePointer);
-         if (!(model.GetNextRun(sourcePalette) is IPaletteRun source)) return;
+         if (GetSourcePalette() is not IPaletteRun source) return;
 
          var oldToNew = Elements.Count.Range().Select(i => Elements.IndexOf(Elements.Single(element => element.Index == i))).ToArray();
          var newElements = Elements.Count.Range().Select(i => new SelectableColor {
@@ -351,6 +368,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       private T RepointIfBadData<T>(T run, int pointerSource) {
          if (!(run is LZRun lz)) return run;
          if (!lz.HasLengthErrors) return run;
+         if (pointerSource < 0 || pointerSource > model.Count - 4) return run; // nothing to repoint through
 
          var token = history.CurrentChange;
          var uncompressed = LZRun.Decompress(model, lz.Start, true);
@@ -418,10 +436,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
       }
 
       private void ExecutePaste(IFileSystem fileSystem) {
-         if (model != null) {
-            int sourcePalette = model.ReadPointer(sourcePalettePointer);
-            if (!(model.GetNextRun(sourcePalette) is IPaletteRun)) return;
-         }
+         if (model != null && GetSourcePalette() == null) return;
 
          // paste data into elements
          var colors = ParseColor(fileSystem.CopyText);
@@ -470,8 +485,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels.Tools {
 
       private void ExecuteSingleReduce() {
          if (model == null) return;
-         int sourcePalette = model.ReadPointer(sourcePalettePointer);
-         if (!(model.GetNextRun(sourcePalette) is IPaletteRun paletteRun)) return;
+         if (GetSourcePalette() is not IPaletteRun paletteRun) return;
          int pageOffset = (paletteRun.PaletteFormat.InitialBlankPages + Page) << 4;
 
          var masses = new List<ColorMass>();
