@@ -4,6 +4,7 @@ using HavenSoft.HexManiac.Core.Models.Runs.Sprites;
 using HavenSoft.HexManiac.Core.ViewModels.DataFormats;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HavenSoft.HexManiac.Core.ViewModels {
    /// <summary>
@@ -12,6 +13,10 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
    /// supports). Reuses the existing per-run SetPixels/SetPalette growth logic (decompress/modify/
    /// recompress/relocate) by writing an all-0xFF placeholder into freshly-found free space first,
    /// then immediately overwriting it with the real imported data through the normal run API.
+   ///
+   /// Each new run can instead be placed at an address the user picks, writing over whatever bytes are
+   /// there (e.g. to replace graphics the game already points to): the run is still built in free space
+   /// first, so its final size is known, then its exact bytes move to that address (see Place).
    /// </summary>
    public static class FreeSpaceImporter {
       public static void ImportSprite(ViewPort viewPort, IFileSystem fs) {
@@ -20,14 +25,15 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          var bits = DeriveBitsPerPixel(palette);
          if (!TryReadName(fs, viewPort.Model, "sprite", out var name)) return;
          var compressed = AskCompressed(fs);
-         var searchStart = PickFreeSpaceStart(fs);
-         var paletteHint = OfferMatchingPalette(viewPort, fs, name, palette, bits, compressed, searchStart);
+         if (!TryPickPlacement(viewPort, fs, name, out var placement)) return;
+         var paletteHint = OfferMatchingPalette(viewPort, fs, name, palette, bits, compressed);
 
          var format = new SpriteFormat(bits, tileWidth, tileHeight, paletteHint);
-         var run = CreateAndRegister<ISpriteRun>(viewPort, name, searchStart, format.ExpectedByteLength, compressed,
-            (model, start) => compressed ? new LzSpriteRun(format, model, start) : new SpriteRun(model, start, format));
+         Func<IDataModel, int, ISpriteRun> construct = (model, start) => compressed ? new LzSpriteRun(format, model, start) : new SpriteRun(model, start, format);
+         var run = CreateAndRegister(viewPort, name, placement.SearchStart, format.ExpectedByteLength, compressed, construct);
          if (run == null) return;
          run.SetPixels(viewPort.Model, viewPort.CurrentChange, 0, image);
+         Place(viewPort, fs, name, placement, construct);
          viewPort.Goto.Execute(name);
       }
 
@@ -56,13 +62,14 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
 
          if (!TryReadName(fs, viewPort.Model, "tilemap", out var name)) return;
          var compressed = AskCompressed(fs);
-         var searchStart = PickFreeSpaceStart(fs);
+         if (!TryPickPlacement(viewPort, fs, name, out var placement)) return;
 
          var format = new TilemapFormat(tileset.SpriteFormat.BitsPerPixel, mapTileWidth, mapTileHeight, tilesetName);
-         var run = CreateAndRegister<ISpriteRun>(viewPort, name, searchStart, format.ExpectedUncompressedLength, compressed,
-            (model, start) => compressed ? new LzTilemapRun(format, model, start) : new TilemapRun(model, start, format));
+         Func<IDataModel, int, ISpriteRun> construct = (model, start) => compressed ? new LzTilemapRun(format, model, start) : new TilemapRun(model, start, format);
+         var run = CreateAndRegister(viewPort, name, placement.SearchStart, format.ExpectedUncompressedLength, compressed, construct);
          if (run == null) return;
          run.SetPixels(viewPort.Model, viewPort.CurrentChange, 0, mapImage);
+         Place(viewPort, fs, name, placement, construct);
          viewPort.Goto.Execute(name);
       }
 
@@ -95,8 +102,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
       }
 
       /// <summary>
-      /// Shared by ImportTileset and ImportTilemap: asks for a name/compression/optional matching
-      /// palette, then creates+populates a new tileset run from an already-loaded indexed image.
+      /// Shared by ImportTileset and ImportTilemap: asks for a name/compression/placement/optional
+      /// matching palette, then creates+populates a new tileset run from an already-loaded indexed image.
       /// Returns (null, null) if the user cancels at any step.
       /// </summary>
       private static (ISpriteRun run, string name) CreateTilesetFromImage(ViewPort viewPort, IFileSystem fs, int[,] image, IReadOnlyList<short> palette, int tileWidth, int tileHeight, string kind) {
@@ -104,14 +111,16 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          var tiles = tileWidth * tileHeight;
          if (!TryReadName(fs, viewPort.Model, kind, out var name)) return (null, null);
          var compressed = AskCompressed(fs);
-         var searchStart = PickFreeSpaceStart(fs);
-         var paletteHint = OfferMatchingPalette(viewPort, fs, name, palette, bits, compressed, searchStart);
+         if (!TryPickPlacement(viewPort, fs, name, out var placement)) return (null, null);
+         var paletteHint = OfferMatchingPalette(viewPort, fs, name, palette, bits, compressed);
 
          var format = new TilesetFormat(bits, tiles, -1, paletteHint);
-         var run = CreateAndRegister<ISpriteRun>(viewPort, name, searchStart, tiles * bits * 8, compressed,
-            (model, start) => compressed ? new LzTilesetRun(format, model, start) : new TilesetRun(format, model, start));
+         Func<IDataModel, int, ISpriteRun> construct = (model, start) => compressed ? new LzTilesetRun(format, model, start) : new TilesetRun(format, model, start);
+         var run = CreateAndRegister(viewPort, name, placement.SearchStart, tiles * bits * 8, compressed, construct);
          if (run == null) return (null, null);
          run.SetPixels(viewPort.Model, viewPort.CurrentChange, 0, image);
+         Place(viewPort, fs, name, placement, construct);
+         run = viewPort.Model.GetNextRun(viewPort.Model.GetAddressFromAnchor(viewPort.CurrentChange, -1, name)) as ISpriteRun ?? run;
          return (run, name);
       }
 
@@ -120,8 +129,8 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          var bits = DeriveBitsPerPixel(palette);
          if (!TryReadName(fs, viewPort.Model, "palette", out var name)) return;
          var compressed = AskCompressed(fs);
-         var searchStart = PickFreeSpaceStart(fs);
-         CreatePalette(viewPort, fs, name, palette, bits, compressed, searchStart);
+         if (!TryPickPlacement(viewPort, fs, name, out var placement)) return;
+         CreatePalette(viewPort, fs, name, palette, bits, compressed, placement);
          viewPort.Goto.Execute(name);
       }
 
@@ -163,12 +172,39 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          return true;
       }
 
-      private static int PickFreeSpaceStart(IFileSystem fs) {
-         var text = fs.RequestText("Free Space", "Enter a hex address to search from, or leave blank to auto-search from the ROM's configured free-space start:");
-         if (string.IsNullOrWhiteSpace(text)) return 0;
+      /// <summary>Where a new run goes: found free space (searching from SearchStart), or written over the bytes at OverwriteAddress.</summary>
+      public readonly record struct Placement(int SearchStart, int OverwriteAddress) {
+         public bool Overwrite => OverwriteAddress >= 0;
+      }
+
+      private static bool TryPickPlacement(ViewPort viewPort, IFileSystem fs, string name, out Placement placement) {
+         placement = new Placement(0, Pointer.NULL);
+         var choice = fs.ShowOptions("Placement", $"Where should '{name}' go?", null,
+            new VisualOption { Index = 0, Option = "Free space", Description = "Search for unused (0xFF) bytes, so nothing else is overwritten." },
+            new VisualOption { Index = 1, Option = "Overwrite at an address", Description = "Write over the bytes at an address you choose (for example, to replace graphics the game already uses). Anything formatted there is cleared." });
+         if (choice == 1) {
+            var selected = viewPort.ConvertViewPointToAddress(viewPort.SelectionStart);
+            var text = fs.RequestText("Overwrite", $"Enter the hex address to write '{name}' at, or leave blank for the current selection ({selected:X6}):");
+            if (text == null) return false;
+            var address = string.IsNullOrWhiteSpace(text) ? selected : ParseHex(text);
+            if (address < 0 || address >= viewPort.Model.Count) {
+               fs.ShowCustomMessageBox($"'{text}' isn't an address in this ROM.", showYesNoCancel: false);
+               return false;
+            }
+            placement = new Placement(0, address);
+            return true;
+         }
+         if (choice != 0) return false;
+         var start = fs.RequestText("Free Space", "Enter a hex address to search from, or leave blank to auto-search from the ROM's configured free-space start:");
+         placement = new Placement(string.IsNullOrWhiteSpace(start) ? 0 : Math.Max(0, ParseHex(start)), Pointer.NULL);
+         return true;
+      }
+
+      private static int ParseHex(string text) {
          text = text.Trim();
+         if (text.StartsWith("<") && text.EndsWith(">")) text = text.Substring(1, text.Length - 2);
          if (text.StartsWith("0x") || text.StartsWith("0X")) text = text.Substring(2);
-         return int.TryParse(text, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var address) ? address : 0;
+         return int.TryParse(text, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var address) ? address : -1;
       }
 
       private static bool AskCompressed(IFileSystem fs) {
@@ -178,7 +214,7 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          return choice == 0;
       }
 
-      private static string OfferMatchingPalette(ViewPort viewPort, IFileSystem fs, string primaryName, IReadOnlyList<short> colors, int bits, bool compressed, int searchStart) {
+      private static string OfferMatchingPalette(ViewPort viewPort, IFileSystem fs, string primaryName, IReadOnlyList<short> colors, int bits, bool compressed) {
          var answer = fs.ShowCustomMessageBox($"Also import a matching palette for '{primaryName}'?");
          if (answer != true) return null;
          var paletteName = primaryName + ".palette";
@@ -186,15 +222,18 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
             fs.ShowCustomMessageBox($"An anchor named '{paletteName}' already exists, so the matching palette was skipped.", showYesNoCancel: false);
             return null;
          }
-         CreatePalette(viewPort, fs, paletteName, colors, bits, compressed, searchStart);
+         if (!TryPickPlacement(viewPort, fs, paletteName, out var placement)) return null;
+         CreatePalette(viewPort, fs, paletteName, colors, bits, compressed, placement);
          return paletteName;
       }
 
-      private static void CreatePalette(ViewPort viewPort, IFileSystem fs, string name, IReadOnlyList<short> colors, int bits, bool compressed, int searchStart) {
+      private static void CreatePalette(ViewPort viewPort, IFileSystem fs, string name, IReadOnlyList<short> colors, int bits, bool compressed, Placement placement) {
          var format = new PaletteFormat(bits, 1);
-         var run = CreateAndRegister<IPaletteRun>(viewPort, name, searchStart, format.ExpectedByteLengthPerPage, compressed,
-            (model, start) => compressed ? new LzPaletteRun(format, model, start) : new PaletteRun(start, format));
-         run?.SetPalette(viewPort.Model, viewPort.CurrentChange, 0, colors);
+         Func<IDataModel, int, IPaletteRun> construct = (model, start) => compressed ? new LzPaletteRun(format, model, start) : new PaletteRun(start, format);
+         var run = CreateAndRegister(viewPort, name, placement.SearchStart, format.ExpectedByteLengthPerPage, compressed, construct);
+         if (run == null) return;
+         run.SetPalette(viewPort.Model, viewPort.CurrentChange, 0, colors);
+         Place(viewPort, fs, name, placement, construct);
       }
 
       /// <summary>
@@ -231,6 +270,48 @@ namespace HavenSoft.HexManiac.Core.ViewModels {
          var run = construct(model, start);
          model.ObserveAnchorWritten(token, name, run);
          return run;
+      }
+
+      /// <summary>
+      /// For an overwrite placement: moves the finished run named `name` (built in free space, so its final size
+      /// is known) to the chosen address. Exactly its bytes are written there, and whatever was formatted over them
+      /// is cleared first (after a confirmation listing those anchors); its free-space copy is cleared back to 0xFF.
+      /// Returns false (the run stays in free space) if it doesn't fit or the user declines.
+      /// </summary>
+      private static bool Place<T>(ViewPort viewPort, IFileSystem fs, string name, Placement placement, Func<IDataModel, int, T> construct) where T : IFormattedRun {
+         if (!placement.Overwrite) return true;
+         var model = viewPort.Model;
+         var token = viewPort.CurrentChange;
+         var current = model.GetNextRun(model.GetAddressFromAnchor(token, -1, name));
+         var (from, length, target) = (current.Start, current.Length, placement.OverwriteAddress);
+         if (from == target) return true;
+         if (target + length > model.Count) {
+            fs.ShowCustomMessageBox($"'{name}' is {length} bytes, which doesn't fit at {target:X6} (the ROM ends at {model.Count:X6}). It was left in free space at {from:X6}.", showYesNoCancel: false);
+            return false;
+         }
+
+         var overwritten = new List<string>();
+         for (var run = model.GetNextRun(target); run.Start < target + length && run.Start < model.Count; run = model.GetNextRun(run.Start + Math.Max(1, run.Length))) {
+            if (run.Start + run.Length <= target || run.Start == from) continue;
+            var anchor = model.GetAnchorFromAddress(-1, run.Start);
+            overwritten.Add(string.IsNullOrEmpty(anchor) ? $"{run.Start:X6}" : anchor);
+         }
+         if (overwritten.Count > 0) {
+            var list = string.Join(", ", overwritten.Take(8)) + (overwritten.Count > 8 ? $", and {overwritten.Count - 8} more" : string.Empty);
+            var answer = fs.ShowCustomMessageBox($"Writing '{name}' ({length} bytes) at {target:X6} will overwrite: {list}. Continue?");
+            if (answer != true) {
+               fs.ShowCustomMessageBox($"'{name}' was left in free space at {from:X6}.", showYesNoCancel: false);
+               return false;
+            }
+         }
+
+         var bytes = new byte[length];
+         Array.Copy(model.RawData, from, bytes, 0, length);
+         model.ClearFormatAndData(token, from, length);
+         model.ClearFormat(token, target, length);
+         for (int i = 0; i < length; i++) token.ChangeData(model, target + i, bytes[i]);
+         model.ObserveAnchorWritten(token, name, construct(model, target));
+         return true;
       }
    }
 }
