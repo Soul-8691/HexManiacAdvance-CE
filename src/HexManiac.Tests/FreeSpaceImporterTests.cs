@@ -104,6 +104,84 @@ namespace HavenSoft.HexManiac.Tests {
          Assert.Equal(0x110, Model.GetAddressFromAnchor(Token, -1, "existing.table"));
       }
 
+      // free space search uses exactly the run's length: an 8x8 4bpp sprite (32 bytes) fits a 32-byte hole
+      [Fact]
+      public void ImportSprite_FreeSpace_FitsExactSizeHole() {
+         SetupImage(compressed: false, placement: "free");
+         FileSystem.RequestText = (title, prompt) => title == "Free Space" ? "100" : "imported";
+         Array.Fill(Model.RawData, (byte)0xFF, 0x200, 0x20); // the hole: exactly 32 bytes, 0x00 on both sides
+
+         FreeSpaceImporter.ImportSprite(ViewPort, FileSystem);
+
+         Assert.Equal(0x200, Model.GetAddressFromAnchor(Token, -1, "imported"));
+         Assert.Equal(14, ((ISpriteRun)Model.GetNextRun(0x200)).GetPixels(Model, 0, -1)[7, 7]);
+         Assert.All(Enumerable.Range(0x800, 0x800), i => Assert.Equal(0xFF, Model[i])); // the building copy was cleared
+      }
+
+      [Fact]
+      public void ImportSprite_FreeSpaceCompressed_FitsSmallHole() {
+         SetupImage(compressed: true, placement: "free");
+         FileSystem.RequestText = (title, prompt) => title == "Free Space" ? "100" : "imported";
+         Array.Fill(Model.RawData, (byte)0xFF, 0x200, 0x40); // 64 bytes: room for the LZ data, not for the old 0x40 padding too
+
+         FreeSpaceImporter.ImportSprite(ViewPort, FileSystem);
+
+         Assert.Equal(0x200, Model.GetAddressFromAnchor(Token, -1, "imported"));
+         Assert.IsType<LzSpriteRun>(Model.GetNextRun(0x200));
+      }
+
+      // the import is built at 0x2000000, then the build area is trimmed off: the ROM keeps its size
+      [Theory]
+      [InlineData(false, "free")]
+      [InlineData(true, "free")]
+      [InlineData(true, "overwrite")]
+      public void Import_BuildAreaTrimmed_RomKeepsItsLength(bool compressed, string placement) {
+         SetupImage(compressed, placement, address: "100");
+         var length = Model.Count;
+
+         FreeSpaceImporter.ImportSprite(ViewPort, FileSystem);
+
+         Assert.Equal(length, Model.Count);
+         Assert.True(Model.GetAddressFromAnchor(Token, -1, "imported") < length);
+      }
+
+      // no free space anywhere in the ROM: the import goes on the end, and the ROM grows by exactly its length
+      [Fact]
+      public void ImportSprite_NoFreeSpace_AppendedToEndOfRom() {
+         SetupImage(compressed: false, placement: "free");
+         Array.Fill(Model.RawData, (byte)0x00, 0, Model.Count);
+         var length = Model.Count;
+
+         FreeSpaceImporter.ImportSprite(ViewPort, FileSystem);
+
+         Assert.Equal(length, Model.GetAddressFromAnchor(Token, -1, "imported"));
+         Assert.Equal(length + 32, Model.Count);
+         Assert.Equal(14, ((ISpriteRun)Model.GetNextRun(length)).GetPixels(Model, 0, -1)[7, 7]);
+      }
+
+      [Fact]
+      public void ImportSprite_NoFreeSpace_UndoRestoresRom() {
+         SetupImage(compressed: true, placement: "free");
+         Array.Fill(Model.RawData, (byte)0x00, 0, Model.Count);
+         var length = Model.Count;
+         FreeSpaceImporter.ImportSprite(ViewPort, FileSystem);
+         ViewPort.ChangeHistory.ChangeCompleted();
+
+         ViewPort.Undo.Execute(null);
+
+         Assert.Equal(length, Model.Count);
+         Assert.Equal(Pointer.NULL, Model.GetAddressFromAnchor(Token, -1, "imported"));
+      }
+
+      [Fact]
+      public void FindExactFreeSpace_SkipsTooSmallHolesAndAligns() {
+         Array.Fill(Model.RawData, (byte)0xFF, 0x101, 0x10); // 16 bytes, but only 15 from an aligned start
+         Array.Fill(Model.RawData, (byte)0xFF, 0x300, 0x10);
+
+         Assert.Equal(0x300, FreeSpaceImporter.FindExactFreeSpace(Model, 0x100, 0x10));
+         Assert.Equal(0x104, FreeSpaceImporter.FindExactFreeSpace(Model, 0x100, 0x0C));
+      }
+
       [Fact]
       public void ImportPalette_Overwrite_WritesColorsAtAddress() {
          SetupImage(compressed: false, placement: "overwrite", address: "0x200");
