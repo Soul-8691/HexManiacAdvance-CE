@@ -172,17 +172,15 @@ namespace HavenSoft.HexManiac.Tests {
          Assert.DoesNotContain("gCardDetail", text);
       }
 
+      private const string BundledSym = "Yak's YGO Hack Demo v.1.0.3 (ROM Base).sym";
+
       [Fact]
-      public void Singletons_BundledSymbolFiles_IncludeEdsBuildsAndResolve() {
+      public void Singletons_BundledSymbolFiles_IncludeYaksYgoHackAndResolve() {
          // the real resources/ folder, as the built app sees it
          var files = BaseViewModelTestClass.Singletons.SymbolFiles;
-         var names = files.Select(file => file.Name).ToList();
 
-         Assert.Contains("eds_demo.sym", names);
-         Assert.Contains("eds_release_demo.sym", names);
-         Assert.Contains("eds_release_demo_extra.sym", names);
-         var extra = files.Single(file => file.Name == "eds_release_demo_extra.sym");
-         Assert.Equal("DuelMainStep", extra.TryGetSymbol(0x0802224C));
+         var sym = files.Single(file => file.Name == BundledSym);
+         Assert.Equal("DuelMainStep", sym.TryGetSymbol(0x080221E8));
       }
 
       [Theory]
@@ -218,17 +216,17 @@ namespace HavenSoft.HexManiac.Tests {
 
       [Fact]
       public void ViewingCodeWithBl_GenericAnchorThenSymbolFileSelected_RenamedToSymbol() {
-         // eds_release_demo_extra.sym: 080083d4 g 00000012 CountActiveCardsOnField
+         // Yak's YGO Hack Demo v.1.0.3 (ROM Base).sym: 08008380 g 00000012 CountActiveCardsOnField
          Model.ExpandData(Token, 0x8400);
-         Parser.Compile(Token, Model, 0, "bl <83D4>");
+         Parser.Compile(Token, Model, 0, "bl <8380>");
          Tool.Mode = CodeMode.Thumb;
          Tool.IsSelected = true;
          SelectRange(0, 4); // no symbols selected: generic name
-         Assert.Equal("code.0083D4", Model.GetAnchorFromAddress(-1, 0x83D4));
+         Assert.Equal("code.008380", Model.GetAnchorFromAddress(-1, 0x8380));
 
-         Tool.SelectedSymbolFileIndex = Tool.SymbolFileOptions.ToList().IndexOf("eds_release_demo_extra.sym");
+         Tool.SelectedSymbolFileIndex = Tool.SymbolFileOptions.ToList().IndexOf(BundledSym);
 
-         Assert.Equal("CountActiveCardsOnField", Model.GetAnchorFromAddress(-1, 0x83D4));
+         Assert.Equal("CountActiveCardsOnField", Model.GetAnchorFromAddress(-1, 0x8380));
          Assert.Contains("<CountActiveCardsOnField>", Tool.Content);
       }
 
@@ -236,15 +234,15 @@ namespace HavenSoft.HexManiac.Tests {
       public void ViewingCodeWithBl_UserNamedAnchor_NotRenamedBySymbolFile() {
          Model.ExpandData(Token, 0x8400);
          ViewPort.Refresh();
-         ViewPort.Edit("@83D4 ^myFunction @000 ");
-         Parser.Compile(Token, Model, 0, "bl <83D4>");
+         ViewPort.Edit("@8380 ^myFunction @000 ");
+         Parser.Compile(Token, Model, 0, "bl <8380>");
          Tool.Mode = CodeMode.Thumb;
          Tool.IsSelected = true;
-         Tool.SelectedSymbolFileIndex = Tool.SymbolFileOptions.ToList().IndexOf("eds_release_demo_extra.sym");
+         Tool.SelectedSymbolFileIndex = Tool.SymbolFileOptions.ToList().IndexOf(BundledSym);
 
          SelectRange(0, 4);
 
-         Assert.Equal("myFunction", Model.GetAnchorFromAddress(-1, 0x83D4));
+         Assert.Equal("myFunction", Model.GetAnchorFromAddress(-1, 0x8380));
       }
 
       [Fact]

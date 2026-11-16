@@ -29,7 +29,7 @@ namespace HavenSoft.HexManiac.Core.Models.Code {
       /// <summary>Mutable for the same reason as CardSymbols. Same BPRE0 gate as PokefireredSymbols.</summary>
       public ProjectLabels ProjectLabels { get; set; }
 
-      /// <summary>A user-chosen .sym file (e.g. eds_demo.sym), or null for none. Only consulted
+      /// <summary>A user-chosen .sym file (e.g. Yak's YGO Hack Demo v.1.0.3 (ROM Base).sym), or null for none. Only consulted
       /// for ROMs that aren't FireRed (BPRE0, which gets pokefirered symbols automatically) or
       /// WCT06 (BY6E) - see UsesSelectableSymbols.</summary>
       public SymbolFile SelectedSymbolFile { get; set; }

@@ -47,7 +47,7 @@ namespace HavenSoft.HexManiac.Core.Models {
       public PokefireredSymbols PokefireredSymbols { get; }
       public ProjectLabels ProjectLabels { get; }
       public CardSymbols CardSymbols { get; }
-      /// <summary>Optional, user-selected *.sym files from resources/ (e.g. eds_demo.sym), for non-FireRed/WCT06 ROMs.</summary>
+      /// <summary>Optional, user-selected *.sym files from resources/ (e.g. Yak's YGO Hack Demo v.1.0.3 (ROM Base).sym), for non-FireRed/WCT06 ROMs.</summary>
       public IReadOnlyList<SymbolFile> SymbolFiles { get; }
       public int CopyLimit { get; }
 
@@ -689,6 +689,10 @@ Use `special2 variable name` when doing an action that has a result.
          // Always show the full 4-part version including the trailing .0 (e.g. "0.5.7.0"),
          // rather than Haven's convention of dropping a zero revision.
          VersionNumber = $"{fvi.FileMajorPart}.{fvi.FileMinorPart}.{fvi.FileBuildPart}.{fvi.FilePrivatePart}";
+         // A CE point release past 4 parts (e.g. "0.5.7.2.1") is the informational version
+         // (SharedAssemblyInfo.cs); it wins when it's a plain dotted number.
+         var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0];
+         if (!string.IsNullOrEmpty(informational) && informational.Split('.').All(part => int.TryParse(part, out _))) VersionNumber = informational;
       }
    }
 

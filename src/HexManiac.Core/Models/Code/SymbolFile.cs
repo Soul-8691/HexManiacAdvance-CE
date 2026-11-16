@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace HavenSoft.HexManiac.Core.Models.Code {
    /// <summary>
    /// A user-selectable nm/objdump-style .sym file (same "AAAAAAAA g SSSSSSSS name" format as
-   /// pokefirered.sym) bundled in resources/, e.g. a decomp's eds_demo.sym. Unlike
+   /// pokefirered.sym) bundled in resources/, e.g. a decomp's Yak's YGO Hack Demo v.1.0.3 (ROM Base).sym. Unlike
    /// PokefireredSymbols (auto-applied to BPRE0), these are only used when explicitly chosen
    /// in the Code Tool, since nothing in a ROM header reliably says which build a .sym matches.
    /// </summary>

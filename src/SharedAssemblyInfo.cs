@@ -11,13 +11,14 @@ using System.Diagnostics.CodeAnalysis;
 // Haven's scheme: Major.Minor.Build.Revision, where Revision == 0 marks a public release
 // (IsPublicRelease) and the displayed VersionNumber drops the trailing .0. The community
 // fork is branded by name ("Community Edition" in the title / About), not by the version
-// number, so these stay purely numeric and Haven-consistent. CE shows the full 4-part
-// string (Singletons.MetadataInfo), so this displays as "0.5.7.2". Revision 2 (like the
-// prior 0.5.6.1 release, any non-zero revision) means IsPublicRelease is false - that only
-// gates a commented-out beta-features block, matching how every "Public Update x.y.z.1"
-// build has shipped.
+// number, so these stay purely numeric and Haven-consistent. Revision 2 (like the prior
+// 0.5.6.1 release, any non-zero revision) means IsPublicRelease is false - that only gates a
+// commented-out beta-features block, matching how every "Public Update x.y.z.1" build has shipped.
+// Assembly and file versions can only have 4 parts, so a CE point release past that (0.5.7.2.1)
+// goes in AssemblyInformationalVersion, which Singletons.MetadataInfo shows as the version.
 [assembly: AssemblyVersion("0.5.7.2")]
 [assembly: AssemblyFileVersion("0.5.7.2")]
+[assembly: AssemblyInformationalVersion("0.5.7.2.1")]
 
 
 // AutoImplement style issues are expected, since it's compatible with earlier versions of C#.
